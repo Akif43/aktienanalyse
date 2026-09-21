@@ -1,0 +1,25 @@
+name: Spike – Erreichbarkeit der Datenquellen
+
+# Manuell starten (Actions → "Spike" → Run workflow). Prüft, ob Yahoo, KAP, Google News und
+# İş Yatırım von GitHub-Rechenzentren aus antworten. Das Ergebnis steht in der Job-Zusammenfassung.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reach:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run spike
+        env:
+          # Optional: Secret FINNHUB_API_KEY im Repo anlegen, dann wird Finnhub mitgeprüft.
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}

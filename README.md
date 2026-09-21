@@ -1,0 +1,196 @@
+# Aktienanalyse-PWA (0 € Budget)
+
+Persönliche Aktienanalyse für BIST (Borsa Istanbul), US und XETRA. Watchlist, technische Analyse mit KI-Text, News/KAP mit
+Einordnung, Kursanzeige und (später) Push-Alarme als PWA auf dem iPhone, ohne Apple-Developer-Account und ohne bezahlte Dienste.
+
+> **Keine Anlageberatung.** Alle Auswertungen sind Einordnungen aus öffentlichen Daten, keine Empfehlungen.
+
+## Status
+
+| Phase | Inhalt | Stand |
+|---|---|---|
+| 1 | Plan, Datenquellen-Vergleich, Push-Lösung, Hosting | erledigt |
+| 2 | Datenanbindung, Indikatoren mit Tests, Watchlist-Speicher | erledigt |
+| 3 | PWA: Watchlist, Kurs, Chart, Suche, installierbar | erledigt (Vercel-Deployment steht noch aus) |
+| **4** | **KI-Auswertung (technisch + News/KAP), TRY/USD/EUR** | **erledigt, aber noch nicht mit echtem KI-Key getestet** |
+| 5 | Hintergrund-Überwachung und Push (ntfy, Web Push) | offen |
+| 6 | Feinschliff, Fehlerbehandlung, Deployment-Anleitung | offen |
+
+## Was die App kann
+
+- **Watchlist** mit Kurs, Tagesänderung, Börsenzeit und Badge **"Echtzeit"** bzw. **"verzögert (ca. 15 Min.)"**, automatisch aktualisiert.
+- **Aktien-Detail** mit Tageshoch/-tief, Vortag, Volumen und den Tabs *Chart & Technik*, *News & Einordnung*, *Alarme* (Alarme folgen in Phase 5).
+- **Candlestick-Chart** (1T bis 5J) mit Volumen, SMA 20/50/200, Bollinger, RSI, MACD. Bei BIST-Aktien lässt sich die **Währung TRY/USD/EUR umschalten**.
+- **Kennzahlen** (im Code berechnet): Trend, Golden/Death Cross, RSI, MACD, Bollinger, ATR, Volumen, Unterstützung/Widerstand, 52-Wochen-Spanne.
+- **KI-Einschätzung** je Aktie: bullish/neutral/bearish, Argumente dafür und dagegen, Risiken, möglicher Einstiegsbereich, Stop-Loss, Kursziele,
+  Chance-Risiko-Verhältnis, Zeithorizont.
+- **News-Einordnung:** je Meldung positiv/neutral/negativ, Relevanz (1 bis 5), Begründung und deutsche Kurzübersetzung türkischer Titel, dazu
+  eine Zusammenfassung mit Argumenten **für und gegen** ein Investment. KAP-Meldungen werden höher gewichtet.
+- **TRY-Inflation:** Bei BIST-Aktien zeigt die App die Kursentwicklung in TRY neben USD und EUR (3 Monate, 6 Monate, 1 Jahr).
+- **Suche** (BIST, XETRA, US), **Einstellungen** (Token, Verbindungstest, KI-Status, Watchlist-Export/-Import), **PWA** (installierbar, offlinefähige Hülle).
+
+## So verhindert die App erfundene Zahlen
+
+1. Alle Kennzahlen berechnet der **Code**, nicht die KI.
+2. Einstieg, Stop-Loss und Kursziele werden ebenfalls **vom Code berechnet** (aus Unterstützungs-/Widerstandszonen und ATR). Die KI wählt nur per
+   ID aus (z. B. `E2`, `SL2`, `T1`) und begründet. Unpassende Auswahl (Stop über Einstieg, unbekannte ID) wird verworfen und vermerkt.
+3. Jede Zahl in den KI-Texten wird gegen das Eingabe-JSON geprüft (gerundet oder abgeschnitten erlaubt). Bei nicht belegten Zahlen gibt es **eine
+   Wiederholung mit Rückmeldung**. Bleiben sie, werden die betroffenen **Sätze entfernt** und die App zeigt, wie viele.
+4. Ausgewogenheit ist Pflicht: Argumente dafür, dagegen und Risiken müssen vorhanden sein, sonst wird die Antwort abgelehnt.
+5. Meldungstexte gelten als fremde Daten: Die KI wird angewiesen, darin stehende Anweisungen nicht zu befolgen.
+
+Grenzen: Der Wächter prüft Zahlen, nicht ob eine Aussage fachlich richtig ist. Kleine Zahlen bis 10, gängige Indikator-Perioden (14, 20, 50, 200 …) und
+Jahreszahlen sind freigegeben. Die KI kann also weiterhin falsch gewichten oder Zusammenhänge falsch deuten. Prüfe Einschätzungen immer selbst.
+
+## KI einrichten (kostenlos)
+
+Ohne Key läuft alles außer dem KI-Text. Die App zeigt dann einen Hinweis und die Kennzahlen funktionieren normal.
+
+**Gemini-Key (Pflicht für die KI):**
+1. aistudio.google.com mit deinem Google-Konto öffnen → **"Get API key"** → **"Create API key"**. Keine Kreditkarte nötig.
+2. Den Key als `GEMINI_API_KEY` in Vercel (Environment Variables) bzw. lokal in der `.env` eintragen.
+3. Standardmodell ist `gemini-3.1-flash-lite`. Laut Drittquellen (Stand 09/2026) hat es das großzügigste Gratis-Kontingent (ca. 500 Anfragen/Tag);
+   die stärkeren Flash-Modelle nur ca. 20/Tag. Dein tatsächliches Limit siehst du in AI Studio. Ändern mit `GEMINI_MODEL`.
+4. Hinweis: Im kostenlosen Tarif dürfen Eingaben laut Googles Bedingungen zur Produktverbesserung genutzt werden. Übertragen werden nur öffentliche
+   Kurs- und Nachrichtendaten, keine persönlichen Daten.
+
+**Groq-Key (optional, Ausweichanbieter bei Limit oder Ausfall von Gemini):** console.groq.com → *API Keys* → `GROQ_API_KEY`. Standardmodell `openai/gpt-oss-120b`.
+
+**Supabase (empfohlen, damit Auswertungen erhalten bleiben):**
+1. supabase.com → **"Start your project"** → mit GitHub anmelden → **New project** (Free, Region *Frankfurt*, ein Datenbank-Passwort vergeben und aufschreiben).
+2. **SQL Editor** → **New query** → den Inhalt von [`supabase/schema.sql`](supabase/schema.sql) einfügen → **Run**.
+3. **Project Settings → API**: *Project URL* als `SUPABASE_URL` und den **service_role**-Key als `SUPABASE_SERVICE_KEY` in Vercel eintragen.
+   Der service_role-Key ist geheim (nie ins Repo oder Frontend). Die Tabelle ist per Row Level Security gesperrt, nur dieser Key darf zugreifen.
+4. Danach in Vercel **neu deployen**, damit die Variablen greifen. In den App-Einstellungen zeigt *Speichern und Verbindung testen* den KI-Status.
+
+Ohne Supabase liegen Auswertungen nur im Arbeitsspeicher der Serverfunktion und gehen bei jedem Kaltstart verloren. Das verbraucht Kontingent schneller.
+Kostenlose Supabase-Projekte pausieren nach etwa einer Woche ohne Nutzung. Dann im Dashboard auf *Restore* klicken (ab Phase 5 hält der Monitor es wach).
+
+**Schutz des Kontingents:** höchstens eine neue Auswertung je Aktie und Stunde, manuelles "Neu auswerten" frühestens nach 10 Minuten, neue Auswertung nur bei
+neuer Tageskerze, Kursbewegung von etwa einer halben ATR oder geändertem Trend/Signal (News: nur bei neuen Meldungen), Tageslimit `AI_DAILY_LIMIT` (Standard 300).
+Bei Limit oder Ausfall zeigt die App die letzte Auswertung als "veraltet".
+
+**Testlauf mit echtem Key** (verbraucht 1 bis 2 Anfragen):
+```bash
+npm run analyze -- THYAO.IS --news
+```
+`npm run check:ai` prüft ohne Key nur, ob die KI-Server erreichbar sind und Fehler richtig erkannt werden. `AI_PROVIDER=demo` liefert Platzhaltertexte
+zum Ausprobieren der Oberfläche (in der App deutlich als Demo gekennzeichnet).
+
+## Schnellstart (lokal)
+
+Voraussetzung: Node.js ≥ 20 (getestet mit 24).
+
+```bash
+npm install
+npm run dev          # http://localhost:5173 (App + API in einem Server)
+npm test             # 275 Tests
+npm run typecheck
+npm run smoke        # Live-Abruf der Datenquellen für ein paar Ticker
+npm run spike        # prüft, ob alle Datenquellen aus der aktuellen Umgebung erreichbar sind
+```
+
+Produktionsnahe Probe (Service Worker, Manifest, API-Funktionen genau wie später auf Vercel):
+
+```bash
+npm run build && npm start     # http://localhost:4173
+```
+
+Alle Umgebungsvariablen sind in [`.env.example`](.env.example) erklärt. Mit `APP_TOKEN` in der `.env` verlangt die API ein Zugriffstoken.
+
+## Deployment auf Vercel (kostenlos) und Installation auf dem iPhone
+
+Die Schritte kannst nur du selbst ausführen (Konten anlegen). Es ist keine Kreditkarte nötig.
+
+1. **Repo auf GitHub:** neues **öffentliches** Repository anlegen und diesen Ordner hochladen.
+2. **Vercel-Konto:** auf vercel.com mit **"Continue with GitHub"** anmelden, Tarif **Hobby** (gratis, nur private Nutzung, passt hier).
+3. **Zugriffstoken erzeugen** (schützt deine Daten-API vor Fremden) und aufschreiben:
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+   ```
+4. **Projekt importieren:** Vercel → *Add New… → Project* → dein Repo wählen. **Framework Preset: "Other"**, Root Directory `./`,
+   Build-Einstellungen unverändert lassen (kommen aus `vercel.json`). Unter **Environment Variables** eintragen:
+   - `APP_TOKEN` = das Token aus Schritt 3
+   - `GEMINI_API_KEY` = Key aus AI Studio (siehe oben; kann auch später nachgetragen werden)
+   - optional `GROQ_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `FINNHUB_API_KEY`
+5. **Deploy** klicken. Danach `https://<dein-projekt>.vercel.app/api/health` im Browser öffnen: es muss
+   `{"ok":true,"authRequired":true,"ai":{…},…}` erscheinen.
+6. **iPhone:** `https://<dein-projekt>.vercel.app` in **Safari** öffnen → Teilen-Symbol → **"Zum Home-Bildschirm"** → Hinzufügen.
+7. Die App **vom Home-Bildschirm** öffnen → *Einstellungen* → Zugriffstoken einfügen → **"Speichern und Verbindung testen"**.
+8. Watchlist füllen (Suche oder Beispielliste).
+
+**Wichtig zu iOS:** Die installierte App hat einen **eigenen Speicher**, getrennt von Safari. Lege die Watchlist deshalb in der
+installierten App an oder nutze in den Einstellungen *Exportieren* (in Safari) und *Importieren* (in der App).
+Bis Phase 5 liegt die Watchlist nur auf dem Gerät.
+
+Falls beim ersten Deployment etwas hakt (z. B. `/api/health` liefert 404), schick mir die Fehlermeldung aus dem Vercel-Build-Log.
+
+## Aufbau
+
+```
+apps/web/            Vite + React + TypeScript, PWA (Service Worker, Manifest), Lightweight Charts
+apps/api/functions/  Einstiegspunkte der API-Funktionen (je Route eine Datei)
+packages/core/       Indikatoren, Datenquellen-Adapter, KI-Auswertung (Anbieter, Zahlen-Wächter, Kandidaten), Speicher
+packages/server/     API-Handler (Web-Standard Request/Response), Zugriffsschutz, Cache
+supabase/            schema.sql für den dauerhaften Zwischenspeicher
+scripts/             smoke, spike-reach, analyze, check-ai-endpoints
+tools/               Build-Skripte, Icons, lokaler Produktionsserver, pandas-Referenz für Tests
+.github/workflows/   ci.yml (Typecheck, Tests, Build), spike.yml (Erreichbarkeit aus GitHub Actions)
+```
+
+`npm run build` erzeugt die Vercel-Ausgabe (Build Output API v3) unter `.vercel/output`: die Web-App als statische Dateien und
+je API-Route eine eigenständig gebündelte Funktion. Derselbe Handler läuft im Dev-Server.
+
+**API** (alle außer `health` mit `Authorization: Bearer <APP_TOKEN>`, sofern gesetzt): `/api/health`, `/api/quote?s=THYAO.IS,AAPL`,
+`/api/candles?s=…&tf=1T|1W|1M|6M|1J|5J`, `/api/history?s=…`, `/api/news?s=…&name=…`, `/api/search?q=…`,
+`/api/analysis?s=…&name=…[&refresh=1]`, `/api/news-analysis?s=…&name=…[&refresh=1]` (503, solange kein KI-Key gesetzt ist).
+
+**KI-Anbieter** sind austauschbar (`LLMProvider`): Gemini → Groq → Ollama (nur lokal), nur konfigurierte werden genutzt, bei Ausfall springt die Kette weiter.
+Ein Claude-Anbieter lässt sich später als weitere Klasse ergänzen, ohne dass sich Auswertung oder Oberfläche ändern.
+
+## Datenquellen (nur gratis) und ihre Grenzen
+
+| Quelle | Zweck | Grenzen |
+|---|---|---|
+| Yahoo Finance | Kurse, Kerzen, Suche, Wechselkurse | **Inoffiziell.** BIST/XETRA ca. 15 Min. verzögert (gemessen 15,3 bzw. 16,0 Min.). Kann Rate-Limits setzen, Cloud-IPs sperren oder das Format ändern. Enthält Datenlücken. |
+| Finnhub Free | US-Live-Kurs, US-News | Nur US. Keine Kerzen. Key nötig. Nicht mit echtem Key getestet. |
+| İş Yatırım | BIST-Tagesdaten (Fallback) | Inoffiziell. Nur Tagesschluss, kein Eröffnungskurs, Volumen geschätzt. Langsam. |
+| KAP (`kap.org.tr`) | Offizielle BIST-Meldungen | Inoffiziell (JSON der Webseite), max. 2000 Einträge je Abruf. Zugriff aus Rechenzentren unbestätigt. |
+| Google News RSS | Nachrichten (tr/de/en) | Nur Titel, Link, Quelle, Datum. Die KI ordnet also nur nach Titel ein, nicht nach Volltext. Laut Google nur für persönlichen Gebrauch. |
+| Gemini / Groq | KI-Text | Gratis-Kontingente schwanken und sind teils nur über Drittquellen belegt. |
+| Twelve Data Free | – | **Kein BIST im Gratis-Plan**, daher nicht eingebunden. |
+
+Für BIST gibt es gratis **keine offizielle Echtzeitquelle**. Die App ist ausschließlich für den privaten Gebrauch gedacht.
+
+## Datenqualität: worauf man achten muss
+
+- **Lücken bei Yahoo:** Die Tagesdaten enthalten gelegentlich Kerzen ohne Kurswerte (bei BIST 4–6 von 500, auch bei den letzten Handelstagen). Der Adapter
+  verwirft sie, die App und die KI bekommen einen Datenhinweis.
+- **Laufende Tageskerze:** Während der Börsenzeit ist die letzte Tageskerze unvollständig, die Kennzahlen nutzen dann den aktuellen Kurs.
+- **Kein Widerstand bei Allzeithochs** (z. B. AAPL): Die Kursziele sind dann ATR-Projektionen und als solche gekennzeichnet.
+- **Chance-Risiko-Verhältnis** ist rein rechnerisch aus Einstieg, Stop und erstem Ziel, keine Prognose.
+- **Währungsumrechnung** nutzt den Tageskurs. Bei Intraday-Kerzen ist das eine Näherung.
+- **US-Aktualität:** Yahoo-US-Kurse sind als "Echtzeit" gekennzeichnet. Das ist eine Annahme und noch nicht gemessen.
+
+## Tests
+
+`npm test` (275 Tests) prüft unter anderem:
+
+- **Indikatoren gegen unabhängige pandas-Referenzwerte** (Toleranz 1e-7), plus von Hand nachgerechnete Fälle.
+- **Adapter** gegen aufgezeichnete Live-Antworten inklusive Fehlerfälle. **KI-Anbieter** (Gemini, Groq, Ollama) gegen nachgebildete Antworten inklusive Kontingent-, Schema- und Key-Fehlern.
+- **Zahlen-Wächter:** deutsche und englische Zahlenformate, Rundung, Datum/Uhrzeit, erfundene Kurse, eingeschleuste Anweisungen.
+- **Auswertungen:** Kandidaten und Handelsplan mit echten THYAO-Daten, Währungsumrechnung, Prüfablauf mit Wiederholung, Zwischenspeicher, Mindestabstand, Tageslimit, Ausfälle.
+- **API und Deployment-Artefakt:** Zugriffsschutz, Fehlerabbildung, Supabase-Anbindung, jede Funktion startet in einem frischen Node-Prozess.
+
+Mutationstests bestätigen, dass die Tests echte Fehler finden (z. B. Wächter ohne Satzentfernung, ignoriertes Tageslimit, Stop über Einstieg).
+Manuell geprüft: iPhone-Viewport (hell/dunkel) mit Demo-KI und echten Kursdaten, Fall ohne KI-Key, Service Worker mit Offline-Start, Token-Ablauf.
+
+**Nicht getestet:** die KI-Anbieter mit echtem Key (Antwortqualität, ob Gemini das Schema akzeptiert, echte Kontingente), Vercel selbst, Installation auf einem echten iPhone.
+
+## Sicherheit
+
+- API-Keys nur als Umgebungsvariablen bzw. Secrets, nie im Frontend oder Repo (im Browser-Bundle geprüft).
+- Die Daten-API verlangt ein Zugriffstoken (`APP_TOKEN`), verglichen ohne Zeitunterschiede. Das Token liegt nur im Speicher deines Geräts.
+- Der Supabase-Service-Key bleibt serverseitig, die Tabelle ist per Row Level Security gesperrt.
+- Ticker-Eingaben werden validiert, Links aus Nachrichtenquellen nur mit `http(s)` geöffnet, Fehlermeldungen geben keine internen Details preis.
+- Der Zugriffsschutz ist für **eine Person** gedacht (ein gemeinsames Token, keine Konten).
