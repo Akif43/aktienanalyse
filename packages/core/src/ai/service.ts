@@ -5,7 +5,7 @@ import { computeTechnicalSnapshot, type TechnicalSnapshot } from '../indicators/
 import type { MarketDataAdapter } from '../adapters/market/types';
 import type { NewsService } from '../adapters/news/service';
 import { instrumentKey, MARKET_CURRENCY, MARKET_TIMEZONE } from '../symbols';
-import type { Candle, Instrument } from '../types';
+import type { Candle, Instrument, NewsItem } from '../types';
 import { buildCandidates } from './candidates';
 import { DEMO_PROVIDER_ID } from './demo';
 import { computeFxPerformance, type FxPerformance } from './fx';
@@ -16,6 +16,8 @@ import type { LLMProvider } from './types';
 
 /** Höchstens eine neue Auswertung je Aktie und Stunde, außer bei manueller Aktualisierung. */
 export const MIN_INTERVAL_MS = 60 * 60_000;
+/** Wie weit zurück offizielle KAP-Meldungen in die technische Auswertung einfließen. */
+const OFFICIAL_LOOKBACK_MS = 14 * 24 * 3_600_000;
 /** Auch bei manueller Aktualisierung mindestens so viel Abstand (schützt das Gratis-Kontingent). */
 export const FORCE_INTERVAL_MS = 10 * 60_000;
 export const DEFAULT_DAILY_LIMIT = 300;
@@ -95,16 +97,18 @@ export class AnalysisService {
       promptVersion: TECHNICAL_PROMPT_VERSION,
       force: opts.force ?? false,
       prepare: async (llm) => {
-        const [history, quote, fx] = await Promise.all([
+        const [history, quote, fx, official] = await Promise.all([
           this.deps.market.getDailyHistory(instrument),
           this.deps.market.getQuote(instrument).catch(() => null),
           this.fxSeries(instrument),
+          this.officialNews(instrument),
         ]);
         // Die KI liest die Hinweise immer auf Deutsch, unabhängig von der Ausgabesprache
         const dataWarnings: Msg[] = [];
         if (history.droppedBars > 0) dataWarnings.push(msg('sourceDropped', { count: history.droppedBars }));
         if (history.approximate) dataWarnings.push(msg('approximateData'));
         if (instrument.market === 'BIST' && fx.length === 0) dataWarnings.push(msg('fxUnavailable'));
+        if (instrument.market === 'BIST' && official === null) dataWarnings.push(msg('kapUnavailable'));
 
         const snapshot = computeTechnicalSnapshot(history.candles);
         const candidates = buildCandidates(snapshot);
@@ -118,13 +122,14 @@ export class AnalysisService {
           snapshot,
           candidates,
           fxPerformance,
+          officialNews: official ?? undefined,
           dataWarnings: dataWarnings.map(toGerman),
           lang,
           },
           toGerman,
         );
         return {
-          inputHash: technicalInputHash(snapshot),
+          inputHash: technicalInputHash(snapshot, (official ?? []).map((n) => n.id)),
           run: async () => {
             const r = await runTechnicalAnalysis({ llm, payload, candidates, lang });
             return { analysis: r.analysis, provider: r.provider, model: r.model, attempts: r.attempts, guardRemoved: r.guardRemoved };
@@ -132,6 +137,20 @@ export class AnalysisService {
         };
       },
     });
+  }
+
+  /**
+   * Neueste offizielle KAP-Meldungen für die technische Auswertung (nur BIST). `null` = nicht abrufbar, `[]` = keine neuen.
+   * Ein Ausfall der Quelle verhindert die Auswertung nicht, wird aber als Datenhinweis vermerkt.
+   */
+  private async officialNews(instrument: Instrument): Promise<NewsItem[] | null> {
+    if (instrument.market !== 'BIST') return null;
+    try {
+      const { items, errors } = await this.deps.news.getNews(instrument, { kind: 'kap', since: this.now() - OFFICIAL_LOOKBACK_MS, limit: 6 });
+      return items.length === 0 && errors.length > 0 ? null : items;
+    } catch {
+      return null;
+    }
   }
 
   // --- News-Auswertung -------------------------------------------------------------------------
@@ -268,7 +287,7 @@ export class AnalysisService {
  * einer halben ATR oder einem Wechsel bei Trend oder Signalen. Kleine Kursschwankungen erzeugen
  * keine neue (kostenpflichtige) Auswertung.
  */
-export function technicalInputHash(s: TechnicalSnapshot): string {
+export function technicalInputHash(s: TechnicalSnapshot, officialIds: readonly string[] = []): string {
   const step = (s.atr14.value ?? s.price * 0.02) * 0.5;
   const parts = {
     v: TECHNICAL_PROMPT_VERSION,
@@ -278,6 +297,8 @@ export function technicalInputHash(s: TechnicalSnapshot): string {
     macd: s.macd.state.position,
     rsi: s.rsi14.zone,
     cross: s.crossSma50Sma200.regime,
+    // Eine neue offizielle Meldung ist ein Grund für eine neue Einschätzung
+    kap: [...officialIds].sort(),
     // Bewusst ohne Zonen: Sie entstehen aus bestätigten Swing-Punkten und ändern sich nur mit einer neuen Tageskerze (`day`).
     // Als Liste würden sie bloß beim Kreuzen einer Zone kippen, weil pro Seite nur die 3 nächsten gezeigt werden.
   };

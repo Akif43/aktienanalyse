@@ -27,6 +27,7 @@ export interface FinnhubNewsOptions extends HttpOptions {
 /** Finnhub Company News (Free: nur US-Titel). Key im Header, nicht in der URL. */
 export class FinnhubNewsAdapter implements NewsAdapter {
   readonly id = ID;
+  readonly kind = 'news' as const;
 
   constructor(private readonly opts: FinnhubNewsOptions) {
     if (!opts.apiKey) throw new AdapterError('CONFIG', 'FINNHUB_API_KEY fehlt', ID);

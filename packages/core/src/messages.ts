@@ -44,6 +44,10 @@ const CATALOG = {
     de: 'Wechselkursdaten (USD/EUR) waren nicht verfügbar.',
     tr: 'Döviz kuru verileri (USD/EUR) alınamadı.',
   },
+  kapUnavailable: {
+    de: 'Die offiziellen KAP-Meldungen waren nicht abrufbar: Die Einschätzung berücksichtigt sie deshalb nicht.',
+    tr: 'Resmî KAP bildirimlerine ulaşılamadı: Bu yüzden değerlendirme onları dikkate almıyor.',
+  },
   // Hinweise zur Auswahl der KI (Handelsplan)
   unknownEntry: {
     de: 'Einstiegs-ID "{id}" existiert nicht und wurde ignoriert.',

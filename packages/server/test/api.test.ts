@@ -216,6 +216,15 @@ describe('News und Suche', () => {
     expect(news.getNews.mock.calls[0]![0]).toMatchObject({ symbol: 'THYAO', market: 'BIST', name: 'Türk Hava' });
   });
 
+  it('kürzt so, dass offizielle KAP-Meldungen nicht hinter neueren Pressemeldungen herausfallen', async () => {
+    const mk = (id: string, kind: string, publishedAt: number) => ({ id, symbol: 'THYAO', kind, title: id, url: 'https://x', source: 's', publishedAt, language: 'tr' });
+    const items = [...Array.from({ length: 6 }, (_, i) => mk(`p${i}`, 'news', 100 - i)), mk('kap1', 'kap', 1)];
+    const { deps } = fakeDeps({ news: { getNews: vi.fn(async () => ({ items, errors: [] })) as any } });
+    const body = await (await get(createApi({}, deps), '/api/news?s=THYAO.IS&limit=3')).json();
+    expect(body.items).toHaveLength(3);
+    expect(body.items.map((i: { id: string }) => i.id)).toContain('kap1');
+  });
+
   it('nutzt ohne limit den Standardwert (40) und begrenzt auf 1..100', async () => {
     const item = (n: number) => ({ id: String(n), symbol: 'AAPL', kind: 'news', title: `T${n}`, url: 'https://x', source: 's', publishedAt: n, language: 'en' });
     const many = Array.from({ length: 150 }, (_, i) => item(i));

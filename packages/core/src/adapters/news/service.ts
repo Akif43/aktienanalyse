@@ -18,7 +18,7 @@ export class NewsService {
   constructor(private readonly adapters: readonly NewsAdapter[]) {}
 
   async getNews(instrument: Instrument, query: NewsQuery = {}): Promise<NewsResult> {
-    const active = this.adapters.filter((a) => a.supports(instrument));
+    const active = this.adapters.filter((a) => a.supports(instrument) && (query.kind === undefined || a.kind === undefined || a.kind === query.kind));
     const settled = await Promise.allSettled(active.map((a) => a.getNews(instrument, { since: query.since })));
 
     const items: NewsItem[] = [];
@@ -30,7 +30,8 @@ export class NewsService {
         errors.push(err instanceof AdapterError ? err : new AdapterError('UPSTREAM', String(err?.message ?? err), active[i]!.id, err));
       }
     });
-    return { items: applyQuery(dedupe(items), query), errors };
+    const wanted = query.kind === undefined ? items : items.filter((i) => i.kind === query.kind);
+    return { items: applyQuery(dedupe(wanted), query), errors };
   }
 }
 

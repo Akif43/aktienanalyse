@@ -568,6 +568,64 @@ describe('DemoProvider', () => {
   });
 });
 
+describe('Gewichtung offizieller KAP-Meldungen', () => {
+  const mkItem = (id: string, kind: 'kap' | 'news', ageH: number): NewsItem => ({
+    id,
+    symbol: 'THYAO',
+    kind,
+    title: kind === 'kap' ? `Pay Dağıtım Kararı ${id}` : `Basın haberi ${id}`,
+    url: `https://x/${id}`,
+    source: kind === 'kap' ? 'KAP' : 'Presse',
+    publishedAt: Date.UTC(2026, 8, 21, 9) - ageH * 3_600_000,
+    language: 'tr',
+    ...(kind === 'kap' ? { category: 'Özel Durum Açıklaması (Genel)' } : {}),
+  });
+
+  it('kennzeichnet in der Nachrichten-Eingabe jede Meldung als offiziell (KAP) oder Presse', () => {
+    const { payload } = buildNewsPayload({ symbol: 'THYAO', market: 'BIST' }, [mkItem('a', 'kap', 1), mkItem('b', 'news', 2)], new Date(Date.UTC(2026, 8, 21, 9)));
+    expect(payload.items.map((i) => i.quelleArt)).toEqual(['offiziell (KAP)', 'Presse']);
+  });
+
+  it('verlangt im Prompt, KAP zuerst und höher zu gewichten, Presse als zweitrangig und Unbestätigtes zu kennzeichnen', () => {
+    const { payload } = buildNewsPayload({ symbol: 'THYAO', market: 'BIST' }, [mkItem('a', 'kap', 1)], new Date(Date.UTC(2026, 8, 21, 9)));
+    const system = buildNewsRequest(payload).system;
+    expect(system).toMatch(/offiziell \(KAP\)/);
+    expect(system).toMatch(/wichtigste und verlässlichste Quelle/);
+    expect(system).toMatch(/zweitrangig/);
+    expect(system).toMatch(/gilt die KAP-Meldung/);
+    expect(system).toMatch(/unbestätigt/);
+    expect(system).toMatch(/Beginne mit den offiziellen KAP-Meldungen/);
+  });
+
+  it('wählt KAP-Meldungen vor Presse aus, auch wenn die Presse neuer ist', () => {
+    const items = [...Array.from({ length: 20 }, (_, i) => mkItem(`p${i}`, 'news', i)), mkItem('k1', 'kap', 200), mkItem('k2', 'kap', 300)];
+    const ids = selectNewsItems(items).map((i) => i.id);
+    expect(ids).toContain('k1');
+    expect(ids).toContain('k2');
+    expect(ids).toHaveLength(15);
+  });
+
+  it('technische Eingabe: KAP-Meldungen erscheinen (neueste zuerst, höchstens 6, Texte gekürzt), ohne Angabe fehlt das Feld', () => {
+    const many = Array.from({ length: 9 }, (_, i) => ({ ...mkItem(`k${i}`, 'kap', i * 10 + 1), title: 'T'.repeat(300) }));
+    const base = { instrument: { symbol: 'THYAO', market: 'BIST' as const, currency: 'TRY' }, quote: null, snapshot, candidates };
+    const withKap = buildTechnicalPayload({ ...base, officialNews: many });
+    expect(withKap.kapMeldungen).toHaveLength(6);
+    expect(withKap.kapMeldungen![0]!.datum >= withKap.kapMeldungen![5]!.datum).toBe(true);
+    expect(withKap.kapMeldungen![0]!.titel).toHaveLength(200);
+    expect(buildTechnicalPayload({ ...base, officialNews: [] }).kapMeldungen).toEqual([]);
+    expect(buildTechnicalPayload(base)).not.toHaveProperty('kapMeldungen');
+  });
+
+  it('technischer Prompt: KAP-Meldungen immer berücksichtigen, Widersprüche benennen, nichts erfinden', () => {
+    const system = buildTechnicalRequest(buildTechnicalPayload({ instrument: { symbol: 'THYAO', market: 'BIST', currency: 'TRY' }, quote: null, snapshot, candidates })).system;
+    expect(system).toMatch(/kapMeldungen/);
+    expect(system).toMatch(/wichtigste Nachrichtenquelle/);
+    expect(system).toMatch(/Berücksichtige sie immer/);
+    expect(system).toMatch(/Widerspruch/);
+    expect(system).toMatch(/erfinde dann keine/);
+  });
+});
+
 describe('Prompt-Sicherheit', () => {
   it('weist die KI an, Meldungstexte nur als Daten zu behandeln', () => {
     const req = buildNewsRequest(buildNewsPayload({ symbol: 'X', market: 'BIST' }, [], new Date(0)).payload);

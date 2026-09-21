@@ -39,6 +39,7 @@ export interface KapOptions extends HttpOptions {
  */
 export class KapAdapter implements NewsAdapter {
   readonly id = ID;
+  readonly kind = 'kap' as const;
 
   constructor(private readonly opts: KapOptions = {}) {}
 

@@ -1,14 +1,14 @@
 import { z } from 'zod';
 import type { TechnicalSnapshot } from '../indicators/snapshot';
 import { DEFAULT_LANG, msg, type Lang, type Msg } from '../messages';
-import type { Instrument, Quote } from '../types';
+import type { Instrument, NewsItem, Quote } from '../types';
 import { resolvePlan, type Candidate, type Candidates, type ResolvedPlan } from './candidates';
 import type { FxPerformance } from './fx';
 import { runStructured, type StructuredResult } from './structured';
 import type { GenerateRequest, JsonSchema, LLMProvider } from './types';
 
 /** Bei Änderungen an Prompt oder Schema erhöhen: macht zwischengespeicherte Auswertungen ungültig. */
-export const TECHNICAL_PROMPT_VERSION = 3;
+export const TECHNICAL_PROMPT_VERSION = 4;
 
 export const VERDICTS = ['bullish', 'neutral', 'bearish'] as const;
 export const CONFIDENCES = ['niedrig', 'mittel', 'hoch'] as const;
@@ -95,7 +95,9 @@ Regeln:
 6. Bei Aktien in türkischer Lira (TRY): "fxPerformance" vergleicht die Kursentwicklung in TRY mit der in Fremdwährung. Ordne ein, dass nominale TRY-Gewinne durch die Abwertung der Lira verzerrt sind, und nutze dafür nur die gelieferten Zahlen.
 7. Das Feld "verdict": bullish = überwiegend positive technische Lage, bearish = überwiegend negative, neutral = gemischt oder seitwärts. Ist der Trend abwärts gerichtet, ist ein Einstieg meist nicht begründbar: dann sind entry und stopLoss oft null.
 8. Das Feld "plain" ist ein Kurzfazit für Menschen OHNE Börsenwissen (Laien): Alltagssprache, kurze einfache Sätze, keine Fachbegriffe. Verwende NICHT die Wörter RSI, MACD, SMA, EMA, ATR, Bollinger, Golden Cross, Death Cross, Widerstand, Unterstützung, Momentum, Volatilität, Swing. Beschreibe stattdessen in Alltagsworten, z. B. "Der Kurs ist in den letzten Wochen gestiegen", "Der Kurs liegt über dem Durchschnitt der letzten Monate", "Der Kurs schwankt gerade stark". Nenne in "plain" möglichst keine Zahlen; wenn doch, dann exakt aus dem JSON. "plain" muss zum verdict passen und ebenfalls ausgewogen sein (mindestens ein Punkt dafür und einer dagegen). Keine Aufforderung zum Kaufen oder Verkaufen.
-9. Alle anderen Felder (summary, arguments, risks, comments) dürfen Fachbegriffe verwenden. Schreibe knapp und konkret in ganzen Sätzen. Antworte ausschließlich mit JSON nach dem vorgegebenen Schema.`;
+9. Alle anderen Felder (summary, arguments, risks, comments) dürfen Fachbegriffe verwenden. Schreibe knapp und konkret in ganzen Sätzen.
+10. "kapMeldungen" (nur bei türkischen Aktien) sind die neuesten offiziellen Pflichtmitteilungen des Unternehmens auf der Plattform KAP und die wichtigste Nachrichtenquelle. Berücksichtige sie immer: Sind wesentliche Meldungen dabei (z. B. Gewinnzahlen, Dividende, Kapitalmaßnahmen, Übernahmen, Großaufträge, Vorstandswechsel, Rechtsstreit), gehören sie in summary, in die Argumente dafür bzw. dagegen und in "plain" (dort in Alltagsworten, z. B. "Die Firma hat offiziell gemeldet, dass …"). Widerspricht eine Meldung dem technischen Bild, benenne den Widerspruch, statt ihn zu übergehen. Ist die Liste leer, gab es zuletzt keine neuen Meldungen: erfinde dann keine. Reine Formalien ohne neuen Inhalt kannst du weglassen. Zahlen aus den Meldungen darfst du nur nennen, wenn sie dort wörtlich stehen.
+11. Antworte ausschließlich mit JSON nach dem vorgegebenen Schema.`;
 
 export interface TechnicalInput {
   instrument: Instrument & { currency: string };
@@ -105,7 +107,24 @@ export interface TechnicalInput {
   fxPerformance?: FxPerformance[];
   /** Hinweise zu den Daten, bereits als Text (die KI liest Deutsch, unabhängig von der Ausgabesprache). */
   dataWarnings?: string[];
+  /** Neueste offizielle KAP-Meldungen (nur BIST). Fehlt das Feld, waren keine abrufbar oder es gibt sie für den Markt nicht. */
+  officialNews?: NewsItem[];
   lang?: Lang;
+}
+
+const MAX_OFFICIAL = 6;
+
+/** Für die KI aufbereitete KAP-Meldungen: neueste zuerst, Texte gekürzt. */
+function officialForPayload(items: readonly NewsItem[]) {
+  return [...items]
+    .sort((a, b) => b.publishedAt - a.publishedAt)
+    .slice(0, MAX_OFFICIAL)
+    .map((n) => ({
+      datum: new Date(n.publishedAt).toISOString().slice(0, 10),
+      ...(n.category ? { kategorie: n.category } : {}),
+      titel: n.title.slice(0, 200),
+      ...(n.summary && n.summary !== n.title ? { kurztext: n.summary.slice(0, 240) } : {}),
+    }));
 }
 
 /** Das JSON, das die KI zu sehen bekommt. Alle erlaubten Zahlen stammen von hier. */
@@ -120,6 +139,7 @@ export function buildTechnicalPayload(input: TechnicalInput, warningText: (m: Ms
     snapshot: rest,
     candidates: input.candidates,
     ...(input.fxPerformance?.length ? { fxPerformance: input.fxPerformance } : {}),
+    ...(input.officialNews ? { kapMeldungen: officialForPayload(input.officialNews) } : {}),
     dataWarnings: [...(input.dataWarnings ?? []), ...warnings.map(warningText)],
   };
 }

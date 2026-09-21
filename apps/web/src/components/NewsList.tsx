@@ -57,11 +57,24 @@ export function NewsSummary({ envelope, ticker, name }: { envelope: NewsEnvelope
 /** Meldungen, die die KI als Rauschen bewertet hat (Wichtigkeit 1), sind zunächst eingeklappt. */
 const isNoise = (rating: Rating | undefined) => rating !== undefined && rating.relevance <= 1;
 
-export function NewsList({ data, analysis }: { data: NewsResponse; analysis?: NewsEnvelope['analysis'] }) {
+export function NewsList({ data, analysis, isBist = false }: { data: NewsResponse; analysis?: NewsEnvelope['analysis']; isBist?: boolean }) {
   const { t } = useT();
   const [showAll, setShowAll] = useState(false);
   const hidden = data.items.filter((n) => isNoise(analysis?.byId[n.id])).length;
   const visible = showAll ? data.items : data.items.filter((n) => !isNoise(analysis?.byId[n.id]));
+  // Offizielle KAP-Meldungen stehen immer vor den Medien, jeweils die neuesten zuerst
+  const official = visible.filter((n) => n.kind === 'kap');
+  const press = visible.filter((n) => n.kind !== 'kap');
+  const grouped = isBist || official.length > 0;
+  // Ist die KAP-Quelle ausgefallen, sagt die Liste nicht "keine Meldungen", sondern zeigt nur den Quellenhinweis oben
+  const kapFailed = data.errors.some((e) => e.adapter === 'kap');
+  const list = (items: NewsItem[]) => (
+    <ul className="list news">
+      {items.map((n) => (
+        <NewsRow key={n.id} item={n} rating={analysis?.byId[n.id]} />
+      ))}
+    </ul>
+  );
 
   return (
     <div>
@@ -77,11 +90,22 @@ export function NewsList({ data, analysis }: { data: NewsResponse; analysis?: Ne
           {visible.length === 0 ? (
             <div className="center-note">{t('news.allNoise')}</div>
           ) : (
-            <ul className="list news">
-              {visible.map((n) => (
-                <NewsRow key={n.id} item={n} rating={analysis?.byId[n.id]} />
-              ))}
-            </ul>
+            grouped ? (
+              <>
+                <h3 className="sub-title news-group">{t('news.kapTitle')}</h3>
+                <p className="row-hint">{t('news.kapText')}</p>
+                {official.length > 0 ? list(official) : !kapFailed && <div className="center-note">{t('news.noKap')}</div>}
+                {press.length > 0 && (
+                  <>
+                    <h3 className="sub-title news-group">{t('news.pressTitle')}</h3>
+                    <p className="row-hint">{t('news.pressText')}</p>
+                    {list(press)}
+                  </>
+                )}
+              </>
+            ) : (
+              list(visible)
+            )
           )}
           {hidden > 0 && (
             <div className="stack">

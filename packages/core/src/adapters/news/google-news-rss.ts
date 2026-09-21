@@ -29,6 +29,7 @@ const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_
  */
 export class GoogleNewsRssAdapter implements NewsAdapter {
   readonly id = ID;
+  readonly kind = 'news' as const;
 
   constructor(private readonly opts: GoogleNewsOptions = {}) {}
 

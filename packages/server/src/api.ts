@@ -1,6 +1,7 @@
 import {
   AdapterError,
   AnalysisService,
+  applyQuery,
   createLlmFromEnv,
   createMarketData,
   createNewsService,
@@ -206,7 +207,8 @@ async function news(url: URL, deps: ApiDeps, cache: TtlCache) {
   const limit = clampInt(url.searchParams.get('limit'), 1, 100, 40);
   const result = await cache.get(`n:${ticker}:${name ?? ''}`, TTL.news, () => deps.news.getNews(inst));
   return {
-    items: result.items.slice(0, limit),
+    // Offizielle KAP-Meldungen behalten Vorrang vor neueren Pressemeldungen, wenn gekürzt wird
+    items: applyQuery(result.items, { limit }),
     errors: result.errors.map((e) => ({ adapter: e.adapter, code: e.code, message: e.message })),
   };
 }

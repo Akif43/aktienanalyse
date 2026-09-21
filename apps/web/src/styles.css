@@ -1066,3 +1066,6 @@ code {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent);
 }
+.news-group {
+  margin-top: 18px;
+}

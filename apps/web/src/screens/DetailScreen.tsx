@@ -114,7 +114,7 @@ export function DetailScreen() {
       <Segmented options={tabs} value={tab} label={t('detail.tabsAria')} onChange={(v) => setParams({ tab: v }, { replace: true })} />
 
       {tab === 'overview' && <OverviewTab ticker={ticker} market={instrument.market} currency={quote?.currency} name={name} />}
-      {tab === 'news' && <NewsTab key={lang} ticker={ticker} name={name ? newsSearchName(name) : undefined} />}
+      {tab === 'news' && <NewsTab key={lang} ticker={ticker} name={name ? newsSearchName(name) : undefined} isBist={instrument.market === 'BIST'} />}
       {tab === 'alarme' && (
         <section className="empty">
           <p className="empty-title">{t('alerts.title')}</p>
@@ -190,7 +190,7 @@ function OverviewTab({ ticker, market, currency, name }: { ticker: string; marke
   );
 }
 
-function NewsTab({ ticker, name }: { ticker: string; name?: string }) {
+function NewsTab({ ticker, name, isBist }: { ticker: string; name?: string; isBist: boolean }) {
   const { t } = useT();
   const news = useNews(ticker, name);
   const hasItems = news.isSuccess && news.data.items.length > 0;
@@ -214,7 +214,7 @@ function NewsTab({ ticker, name }: { ticker: string; name?: string }) {
               <NewsSummary envelope={rating.data} ticker={ticker} name={name} />
             ))}
           <h2 className="section-title">{t('news.listTitle')}</h2>
-          <NewsList data={news.data} analysis={rating.data?.analysis} />
+          <NewsList data={news.data} analysis={rating.data?.analysis} isBist={isBist} />
           <p className="row-hint pad">{t('news.footnote')}</p>
         </>
       )}

@@ -56,8 +56,16 @@ function fakeMarket() {
 const item = (id: string, kind: 'kap' | 'news' = 'news', t = T0 - 3_600_000): NewsItem => ({ id, symbol: 'THYAO', kind, title: `Meldung ${id}`, url: `https://x/${id}`, source: 'Presse', publishedAt: t, language: 'tr' });
 
 function fakeNews(items: NewsItem[] = []) {
-  const state = { items, calls: 0 };
-  const adapter: NewsAdapter = { id: 'fake', supports: () => true, getNews: async () => (state.calls++, state.items) };
+  const state = { items, calls: 0, fail: false };
+  const adapter: NewsAdapter = {
+    id: 'fake',
+    supports: () => true,
+    getNews: async () => {
+      state.calls++;
+      if (state.fail) throw new AdapterError('BLOCKED', 'kap geblockt', 'fake');
+      return state.items;
+    },
+  };
   return { service: new NewsService([adapter]), state };
 }
 
@@ -271,6 +279,62 @@ describe('AnalysisService: technische Auswertung', () => {
     const payload = JSON.parse(/```json\s*([\s\S]*?)\s*```/.exec(llm.requests[0]!.prompt)![1]!);
     expect(payload.quote).toBeNull();
     expect(payload.dataWarnings.join(' ')).toMatch(/Wechselkursdaten/);
+  });
+});
+
+describe('AnalysisService: offizielle KAP-Meldungen in der technischen Auswertung', () => {
+  const promptPayload = (req: GenerateRequest) => JSON.parse(/```json\s*([\s\S]*?)\s*```/.exec(req.prompt)![1]!);
+  const kap = (id: string, ageMs = 3_600_000): NewsItem => ({ ...item(id, 'kap', T0 - ageMs), category: 'Özel Durum Açıklaması (Genel)', title: `Pay Dağıtım ${id}` });
+
+  it('BIST: die KI bekommt die neuesten KAP-Meldungen, Presse-Meldungen nicht', async () => {
+    const { service, llm } = setup({ news: [kap('k1'), item('p1')] });
+    await service.technical(THYAO);
+    const payload = promptPayload(llm.requests[0]!);
+    expect(payload.kapMeldungen).toHaveLength(1);
+    expect(payload.kapMeldungen[0]).toMatchObject({ titel: 'Pay Dağıtım k1', kategorie: 'Özel Durum Açıklaması (Genel)' });
+  });
+
+  it('BIST: ältere KAP-Meldungen (über 14 Tage) zählen nicht, die Liste bleibt leer statt zu fehlen', async () => {
+    const { service, llm } = setup({ news: [kap('alt', 20 * 86_400_000)] });
+    await service.technical(THYAO);
+    expect(promptPayload(llm.requests[0]!).kapMeldungen).toEqual([]);
+  });
+
+  it('US-Aktie: keine KAP-Abfrage und kein KAP-Feld', async () => {
+    const { service, llm, news } = setup({ news: [kap('k1')] });
+    await service.technical(AAPL);
+    expect(news.state.calls).toBe(0);
+    expect(promptPayload(llm.requests[0]!)).not.toHaveProperty('kapMeldungen');
+  });
+
+  it('KAP nicht abrufbar: Auswertung läuft weiter, die KI erfährt es als Datenhinweis', async () => {
+    const { service, llm, news } = setup();
+    news.state.fail = true;
+    const r = await service.technical(THYAO);
+    expect(r.meta.cached).toBe(false);
+    const payload = promptPayload(llm.requests[0]!);
+    expect(payload).not.toHaveProperty('kapMeldungen');
+    expect(payload.dataWarnings.join(' ')).toMatch(/KAP-Meldungen waren nicht abrufbar/);
+  });
+
+  it('eine neue KAP-Meldung löst nach dem Mindestabstand eine neue Einschätzung aus, ohne sie nicht', async () => {
+    const { service, clock, llm, news } = setup({ news: [kap('k1')] });
+    await service.technical(THYAO);
+    clock.now += MIN_INTERVAL_MS + 1;
+    await service.technical(THYAO);
+    expect(llm.requests).toHaveLength(1);
+
+    news.state.items = [kap('k2'), kap('k1')];
+    clock.now += MIN_INTERVAL_MS + 1;
+    await service.technical(THYAO);
+    expect(llm.requests).toHaveLength(2);
+  });
+
+  it('technicalInputHash unterscheidet Meldungslisten unabhängig von der Reihenfolge', () => {
+    const snap = computeTechnicalSnapshot(ref.candles);
+    expect(technicalInputHash(snap, ['a', 'b'])).toBe(technicalInputHash(snap, ['b', 'a']));
+    expect(technicalInputHash(snap, ['a'])).not.toBe(technicalInputHash(snap, ['a', 'b']));
+    expect(technicalInputHash(snap)).toBe(technicalInputHash(snap, []));
   });
 });
 

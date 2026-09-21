@@ -23,7 +23,7 @@ News/KAP mit Einordnung, Kursanzeige und (später) Push-Alarme als PWA auf dem i
 - **Meine Aktien** mit Name, Kurs, Tagesänderung und einem einfachen Hinweis "Live" bzw. "ca. 15 Min. verzögert", automatisch aktualisiert.
 - **Einfache Ansicht (Standard)** je Aktie: Tageswerte, **Kurzfazit mit Ampel** (Sieht eher gut aus / Gemischtes Bild / Sieht eher schwach aus) in Alltagssprache mit "Das spricht dafür/dagegen", ein **einfacher Kursverlauf** (Tag, Woche, Monat, 6 Monate, Jahr, 5 Jahre) mit Veränderung, Höchst- und Tiefststand, **Auf einen Blick** (einfache Aussagen zu Trend, Jahresspanne und Schwankung, auch ohne KI) und bei BIST-Aktien der **Lira-Effekt** (Entwicklung in Lira, Dollar und Euro).
 - **Details für Fortgeschrittene** (eingeklappt, Zustand wird gemerkt): Kerzenchart mit SMA, Bollinger, RSI, MACD, möglicher Handelsplan (Einstieg, Verlustbremse, Kursziele, Chance-Risiko), ausführliche KI-Begründung, alle Kennzahlen mit kurzen Erklärungen und ein Begriffs-Wörterbuch.
-- **Nachrichten:** je Meldung Positiv/Neutral/Negativ und ein Hinweis "Wichtig", Titel in der gewählten Sprache (von der KI übersetzt, Original darunter), dazu "Kurz gesagt" mit Positivem und Negativem. KAP-Meldungen werden höher gewichtet.
+- **Nachrichten:** je Meldung Positiv/Neutral/Negativ und ein Hinweis "Wichtig", Titel in der gewählten Sprache (von der KI übersetzt, Original darunter), dazu "Kurz gesagt" mit Positivem und Negativem. **Offizielle KAP-Meldungen haben Vorrang:** Sie stehen in einem eigenen Abschnitt vor den Medien, die KI gewichtet sie höher (Presse gilt als zweitrangig und Unbestätigtes wird als solches genannt), und sie fließen bei BIST-Aktien auch in das **Kurzfazit** ein (die neuesten Meldungen der letzten 14 Tage; eine neue Meldung löst nach dem Mindestabstand eine neue Einschätzung aus).
 - **Suche** (BIST, XETRA, US), **Einstellungen** (Sprache, Zugangscode, Verbindungstest, KI-Status, Liste sichern), **PWA** (installierbar, offlinefähige Hülle). Alarme folgen in Phase 5.
 
 ## So verhindert die App erfundene Zahlen
@@ -171,7 +171,7 @@ Für BIST gibt es gratis **keine offizielle Echtzeitquelle**. Die App ist aussch
 
 ## Tests
 
-`npm test` (301 Tests) prüft unter anderem:
+`npm test` (315 Tests) prüft unter anderem:
 
 - **Indikatoren gegen unabhängige pandas-Referenzwerte** (Toleranz 1e-7), plus von Hand nachgerechnete Fälle.
 - **Adapter** gegen aufgezeichnete Live-Antworten inklusive Fehlerfälle. **KI-Anbieter** (Gemini, Groq, Ollama) gegen nachgebildete Antworten inklusive Kontingent-, Schema- und Key-Fehlern.

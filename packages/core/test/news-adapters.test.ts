@@ -236,9 +236,32 @@ describe('NewsService', () => {
     expect(errors[0]!.code).toBe('BLOCKED');
   });
 
+  it('kind: fragt nur Quellen dieser Art und liefert nur Meldungen dieser Art', async () => {
+    const kapItem = { ...item('k1', 'Kâr payı açıklaması', 500), kind: 'kap' as const };
+    let pressAsked = false;
+    const press: NewsAdapter = { ...stub('gn', [item('9', 'Basın haberi', 400)]), kind: 'news', getNews: async () => ((pressAsked = true), [item('9', 'Basın haberi', 400)]) };
+    const kap: NewsAdapter = { ...stub('kap', [kapItem, item('8', 'Karışık', 100)]), kind: 'kap' };
+    const svc = new NewsService([kap, press]);
+    const only = await svc.getNews(THYAO, { kind: 'kap' });
+    expect(only.items.map((i) => i.id)).toEqual(['k1']);
+    expect(pressAsked).toBe(false);
+    expect((await svc.getNews(THYAO)).items.map((i) => i.id)).toEqual(['k1', '9', '8']);
+  });
+
   it('wendet limit nach dem Zusammenführen an', async () => {
     const svc = new NewsService([stub('a', [item('1', 'a', 1), item('2', 'b', 2), item('3', 'c', 3)])]);
     expect((await svc.getNews(THYAO, { limit: 2 })).items.map((i) => i.id)).toEqual(['3', '2']);
+  });
+
+  it('limit: eine ältere KAP-Meldung wird nicht von neueren Pressemeldungen verdrängt', async () => {
+    const kapItem = { ...item('k1', 'Kâr payı açıklaması', 1), kind: 'kap' as const };
+    const press = Array.from({ length: 10 }, (_, i) => item(`p${i}`, `Haber ${i}`, 100 + i));
+    const svc = new NewsService([stub('a', [kapItem, ...press])]);
+    const { items } = await svc.getNews(THYAO, { limit: 4 });
+    expect(items).toHaveLength(4);
+    expect(items.map((i) => i.id)).toContain('k1');
+    // Reihenfolge bleibt: neueste zuerst
+    expect(items.map((i) => i.publishedAt)).toEqual([...items.map((i) => i.publishedAt)].sort((a, b) => b - a));
   });
 
   it('dedupe ist unabhängig von Groß-/Kleinschreibung und Satzzeichen (türkisches İ/ı)', () => {
