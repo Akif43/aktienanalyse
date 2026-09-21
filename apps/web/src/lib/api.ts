@@ -17,6 +17,9 @@ export class ApiError extends Error {
 }
 
 export const UNAUTHORIZED_EVENT = 'aktien:unauthorized';
+/** Wird ausgelöst, sobald nach einem 401 wieder eine Anfrage gelingt (Token wurde korrigiert): blendet den Hinweis aus. */
+export const AUTHORIZED_EVENT = 'aktien:authorized';
+let unauthorizedShown = false;
 
 export interface QuoteResult {
   ticker: string;
@@ -52,8 +55,15 @@ export async function apiGet<T>(
 
   const body = await res.json().catch(() => null);
   if (!res.ok) {
-    if (res.status === 401) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+    if (res.status === 401) {
+      unauthorizedShown = true;
+      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+    }
     throw new ApiError(body?.error?.code ?? 'HTTP', body?.error?.message ?? `Fehler ${res.status}`, res.status);
+  }
+  if (unauthorizedShown) {
+    unauthorizedShown = false;
+    window.dispatchEvent(new Event(AUTHORIZED_EVENT));
   }
   return body as T;
 }

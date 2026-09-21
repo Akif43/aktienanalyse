@@ -1,7 +1,7 @@
 import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from 'react';
 import { Link, Route, Routes } from 'react-router-dom';
 import { TabBar } from './components/ui';
-import { UNAUTHORIZED_EVENT } from './lib/api';
+import { AUTHORIZED_EVENT, UNAUTHORIZED_EVENT } from './lib/api';
 import { DetailScreen } from './screens/DetailScreen';
 import { SearchScreen } from './screens/SearchScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
@@ -36,8 +36,13 @@ function UnauthorizedBanner() {
   const [show, setShow] = useState(false);
   useEffect(() => {
     const on = () => setShow(true);
+    const off = () => setShow(false);
     window.addEventListener(UNAUTHORIZED_EVENT, on);
-    return () => window.removeEventListener(UNAUTHORIZED_EVENT, on);
+    window.addEventListener(AUTHORIZED_EVENT, off);
+    return () => {
+      window.removeEventListener(UNAUTHORIZED_EVENT, on);
+      window.removeEventListener(AUTHORIZED_EVENT, off);
+    };
   }, []);
   if (!show) return null;
   return (
