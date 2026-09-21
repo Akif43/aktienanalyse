@@ -123,7 +123,12 @@ export function TechPanel({ snapshot: s, market, fx = [] }: { snapshot: Technica
         {[...s.levels.resistances].reverse().map((z) => (
           <ZoneRow key={z.id} zone={z} price={s.price} />
         ))}
-        {s.levels.resistances.length === 0 && <div className="row-hint pad">Kein Widerstand über dem Kurs (Kurs nahe Hoch im Datenzeitraum).</div>}
+        {s.levels.resistances.length === 0 && (
+          <div className="row-hint pad">
+            Keine belastbare Widerstandszone über dem Kurs (mind. 2 Berührungen).
+            {s.range52w && s.range52w.percentBelowHigh > 0.5 ? ` Nächstes Hindernis: 52-Wochen-Hoch bei ${formatNumber(s.range52w.high)}.` : ' Der Kurs liegt nahe am Hoch des Datenzeitraums.'}
+          </div>
+        )}
         {s.levels.inside.map((z) => (
           <ZoneRow key={z.id} zone={z} price={s.price} />
         ))}

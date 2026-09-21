@@ -60,11 +60,24 @@ export function buildCandidates(snapshot: TechnicalSnapshot): Candidates {
   if (supports[1]) out.stops.push(make('SL3', 'stop', `Stop unter Unterstützungszone ${supports[1].id}`, supports[1].low - 0.5 * atr, supports[1].low - 0.5 * atr, `Unterkante von ${supports[1].id} − 0,5 × ATR`));
   if (r1) out.stops.push(make('SL4', 'stop', `Stop unter dem ausgebrochenen Widerstand ${r1.id}`, r1.low - 0.5 * atr, r1.low - 0.5 * atr, `Unterkante von ${r1.id} − 0,5 × ATR (passt zu Ausbruch E3)`));
 
-  // Kursziele: Unterkanten der Widerstandszonen (vorsichtig), sonst ATR-Projektion
-  resistances.slice(0, 3).forEach((z, i) => out.targets.push(make(`T${i + 1}`, 'target', `Widerstandszone ${z.id} (Unterkante)`, z.low, z.low, `Unterkante von ${z.id} (${z.touches} Berührungen)`)));
+  // Kursziele: Unterkanten der Widerstandszonen (vorsichtig) und das 52-Wochen-Hoch, auch wenn es nur einmal berührt wurde
+  // (eine Zone braucht mindestens 2 Berührungen). Ohne beides: ATR-Projektionen.
+  const points: { value: number; label: string; basis: string }[] = resistances
+    .slice(0, 3)
+    .map((z) => ({ value: z.low, label: `Widerstandszone ${z.id} (Unterkante)`, basis: `Unterkante von ${z.id} (${z.touches} Berührungen)` }));
+  const high52 = snapshot.range52w?.high ?? null;
+  const coveredByZone = high52 !== null && resistances.some((z) => high52 >= z.low - 0.5 * atr && high52 <= z.high + 0.5 * atr);
+  const hasHigh52Target = high52 !== null && high52 > price + 0.25 * atr && !coveredByZone;
+  if (hasHigh52Target) points.push({ value: high52, label: '52-Wochen-Hoch', basis: '52-Wochen-Hoch (Ausbruch darüber wäre ein neues Jahreshoch)' });
+  points.sort((a, b) => a.value - b.value);
+  points.forEach((p, i) => out.targets.push(make(`T${i + 1}`, 'target', p.label, p.value, p.value, p.basis)));
+
   if (out.targets.length === 0) {
     out.targets.push(make('T1', 'target', 'ATR-Projektion 2 ×', price + 2 * atr, price + 2 * atr, 'Kurs + 2 × ATR (kein Widerstand im Datenzeitraum)'));
     out.targets.push(make('T2', 'target', 'ATR-Projektion 4 ×', price + 4 * atr, price + 4 * atr, 'Kurs + 4 × ATR (kein Widerstand im Datenzeitraum)'));
+  } else if (hasHigh52Target && out.targets.length === 1) {
+    // Nur das Jahreshoch als Hindernis: ein weiteres Ziel darüber als Ausbruchsprojektion
+    out.targets.push(make('T2', 'target', 'ATR-Projektion über dem 52-Wochen-Hoch', high52! + 2 * atr, high52! + 2 * atr, '52-Wochen-Hoch + 2 × ATR (nur nach Ausbruch über das Jahreshoch)'));
   }
   return out;
 }

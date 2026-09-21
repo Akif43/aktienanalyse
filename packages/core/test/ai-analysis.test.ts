@@ -58,7 +58,10 @@ describe('buildCandidates (echte THYAO-Daten)', () => {
   it('liefert Einstieg, Stop und Ziele mit stabilen IDs', () => {
     expect(candidates.entries.map((c) => c.id)).toEqual(['E1', 'E2', 'E3']);
     expect(candidates.stops.map((c) => c.id)).toEqual(['SL1', 'SL2', 'SL3', 'SL4']);
-    expect(candidates.targets.map((c) => c.id)).toEqual(['T1', 'T2', 'T3']);
+    // drei Widerstandszonen plus das (nur einmal berührte) 52-Wochen-Hoch als vierter Kandidat
+    expect(candidates.targets.map((c) => c.id)).toEqual(['T1', 'T2', 'T3', 'T4']);
+    expect(candidates.targets[3]!.label).toBe('52-Wochen-Hoch');
+    expect(candidates.targets[3]!.low).toBe(snapshot.range52w!.high);
   });
 
   it('leitet die Werte aus Kurs, ATR und Zonen ab', () => {
@@ -84,8 +87,29 @@ describe('buildCandidates (echte THYAO-Daten)', () => {
     expect(candidates.targets.map((t) => t.low)).toEqual([...candidates.targets.map((t) => t.low)].sort((a, b) => a - b));
   });
 
-  it('nutzt ATR-Projektionen, wenn es keinen Widerstand gibt (Allzeithoch)', () => {
+  it('nimmt das 52-Wochen-Hoch als Ziel, wenn es keine Widerstandszone gibt, und projiziert erst darüber', () => {
     const noR = { ...snapshot, levels: { ...snapshot.levels, resistances: [] } };
+    const c = buildCandidates(noR);
+    const high = snapshot.range52w!.high;
+    const atr = snapshot.atr14.value!;
+    expect(c.targets.map((t) => t.id)).toEqual(['T1', 'T2']);
+    expect(c.targets[0]).toMatchObject({ label: '52-Wochen-Hoch', low: high });
+    expect(c.targets[1]!.low).toBeCloseTo(high + 2 * atr, 1);
+    expect(c.targets[1]!.low).toBeGreaterThan(high); // keine Projektion unterhalb des Jahreshochs
+  });
+
+  it('doppelt das 52-Wochen-Hoch nicht, wenn es schon in einer Widerstandszone liegt', () => {
+    const r1 = snapshot.levels.resistances[0]!;
+    const inZone = { ...snapshot, range52w: { ...snapshot.range52w!, high: (r1.low + r1.high) / 2 } };
+    const c = buildCandidates(inZone);
+    expect(c.targets.map((t) => t.id)).toEqual(['T1', 'T2', 'T3']);
+    expect(c.targets.some((t) => t.label === '52-Wochen-Hoch')).toBe(false);
+  });
+
+  it('nutzt ATR-Projektionen, wenn es keinen Widerstand gibt (Allzeithoch)', () => {
+    // Kurs auf dem Jahreshoch: kein Hindernis darüber, also nur Projektionen
+    const ath = { ...snapshot, range52w: { ...snapshot.range52w!, high: snapshot.price }, levels: { ...snapshot.levels, resistances: [] } };
+    const noR = ath;
     const c = buildCandidates(noR);
     expect(c.targets.map((t) => t.id)).toEqual(['T1', 'T2']);
     expect(c.targets[0]!.basis).toMatch(/kein Widerstand/);

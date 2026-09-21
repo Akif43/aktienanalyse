@@ -7,7 +7,7 @@ import { runStructured, type StructuredResult } from './structured';
 import type { GenerateRequest, JsonSchema, LLMProvider } from './types';
 
 /** Bei Änderungen an Prompt oder Schema erhöhen: macht zwischengespeicherte Auswertungen ungültig. */
-export const TECHNICAL_PROMPT_VERSION = 1;
+export const TECHNICAL_PROMPT_VERSION = 2;
 
 export const VERDICTS = ['bullish', 'neutral', 'bearish'] as const;
 export const CONFIDENCES = ['niedrig', 'mittel', 'hoch'] as const;
@@ -63,7 +63,7 @@ export const TECHNICAL_SYSTEM = `Du bist ein erfahrener, nüchterner Chartanalys
 Regeln:
 1. Verwende ausschließlich Zahlen, die im JSON stehen. Erfinde, schätze oder berechne keine Kurse, Prozentwerte oder Kennzahlen. Nenne Preise nur, wenn sie wörtlich im JSON vorkommen.
 2. Einstiegsbereich, Stop-Loss und Kursziele wählst du ausschließlich über die IDs aus "candidates" (z. B. E2, SL2, T1). Passt keine Option, setze null (bzw. eine leere Liste) und begründe das.
-3. Sei ausgewogen: Nenne immer Argumente dafür UND dagegen sowie Risiken, auch bei klarem Trend. Widersprüchliche Signale gehören ausdrücklich in die Einschätzung.
+3. Sei ausgewogen: Nenne immer Argumente dafür UND dagegen sowie Risiken, auch bei klarem Trend. Widersprüchliche Signale gehören ausdrücklich in die Einschätzung. Grundlage für Aussagen zum Trend ist "snapshot.trend.state" (Swing-Hochs und -Tiefs). Zeigen gleitende Durchschnitte oder Golden Cross in eine andere Richtung, benenne den Widerspruch, statt einfach "Aufwärtstrend" zu schreiben.
 4. Gib keine Anlageempfehlung und keine Kaufaufforderung. Formuliere als technische Einschätzung ("aus technischer Sicht", "spricht für", "spricht gegen"). Keine Garantien, keine Prognosen als Tatsache.
 5. Beachte "dataWarnings" (Datenlücken) und weise auf relevante Einschränkungen hin.
 6. Bei Aktien in türkischer Lira (TRY): "fxPerformance" vergleicht die Kursentwicklung in TRY mit der in Fremdwährung. Ordne ein, dass nominale TRY-Gewinne durch die Abwertung der Lira verzerrt sind, und nutze dafür nur die gelieferten Zahlen.

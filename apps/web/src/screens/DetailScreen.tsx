@@ -271,7 +271,6 @@ function ChartTab({ ticker, market, currencyLabel, name }: { ticker: string; mar
       <AnalysisCard query={analysis} ticker={ticker} name={name} />
 
       <h2 className="section-title">Kennzahlen</h2>
-      <Disclaimer />
       {history.isPending ? (
         <Spinner label="Berechne Kennzahlen …" />
       ) : history.isError ? (

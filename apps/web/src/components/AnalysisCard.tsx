@@ -120,7 +120,7 @@ export function AnalysisCard({ query, ticker, name }: { query: { data?: Technica
             Chance-Risiko-Verhältnis
             <div className="row-hint">Rein rechnerisch aus Einstieg, Stop und erstem Ziel, keine Prognose.</div>
           </div>
-          <div className="row-value">{a.riskReward === null ? <span className="muted">nicht berechenbar</span> : `${formatNumber(a.riskReward, 2)} : 1`}</div>
+          <div className="row-value nowrap">{a.riskReward === null ? <span className="muted">nicht berechenbar</span> : `${formatNumber(a.riskReward, 2)} : 1`}</div>
         </div>
         <div className="row">
           <div className="row-label">
