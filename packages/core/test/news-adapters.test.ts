@@ -51,12 +51,22 @@ describe('Google News RSS', () => {
     await a.getNews(AAPL);
 
     const [tr, de, en] = m.calls.map((c) => new URL(c.url));
-    expect(tr!.searchParams.get('q')).toBe('Türk Hava Yolları THYAO when:3d');
+    // BIST: nur der Firmenname in Anführungszeichen (das Kürzel zieht Ranglisten-Rauschen an)
+    expect(tr!.searchParams.get('q')).toBe('"Türk Hava Yolları" when:3d');
     expect([tr!.searchParams.get('hl'), tr!.searchParams.get('gl'), tr!.searchParams.get('ceid')]).toEqual(['tr', 'TR', 'TR:tr']);
     expect(de!.searchParams.get('q')).toBe('SAP SE SAP when:3d');
     expect(de!.searchParams.get('hl')).toBe('de');
     expect(en!.searchParams.get('q')).toBe('AAPL when:3d');
     expect(en!.searchParams.get('ceid')).toBe('US:en');
+  });
+
+  it('BIST ohne Namen sucht mit dem Kürzel, Anführungszeichen im Namen werden entfernt', async () => {
+    const m = mockFetch(text(xml));
+    const a = new GoogleNewsRssAdapter({ fetch: m.fetch });
+    await a.getNews({ symbol: 'ASELS', market: 'BIST' });
+    await a.getNews({ symbol: 'ASELS', market: 'BIST', name: 'Asel"san' });
+    expect(new URL(m.calls[0]!.url).searchParams.get('q')).toBe('ASELS when:7d');
+    expect(new URL(m.calls[1]!.url).searchParams.get('q')).toBe('"Aselsan" when:7d');
   });
 
   it('unterstützt eine eigene Suchanfrage, since und limit', async () => {

@@ -51,7 +51,11 @@ export class GoogleNewsRssAdapter implements NewsAdapter {
   private searchTerm(instrument: Instrument): string {
     const override = this.opts.queryOverride?.(instrument);
     if (override) return override;
-    return [instrument.name, instrument.symbol].filter(Boolean).join(' ');
+    const name = instrument.name?.replace(/"/g, '').trim();
+    // BIST: Das Kürzel steht in jeder Rangliste ("meistgekaufte Aktien der Woche"). Gemessen bestanden damit ca. 70 % der Treffer
+    // aus solchem Rauschen, mit dem Firmennamen in Anführungszeichen nur ca. 1 %. Ohne Namen bleibt nur das Kürzel.
+    if (instrument.market === 'BIST' && name) return `"${name}"`;
+    return [name, instrument.symbol].filter(Boolean).join(' ');
   }
 }
 

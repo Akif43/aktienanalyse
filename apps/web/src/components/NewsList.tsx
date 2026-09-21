@@ -1,4 +1,5 @@
 import type { NewsItem, Sentiment } from '@aktien/core';
+import { useState } from 'react';
 import type { NewsEnvelope, NewsResponse } from '../lib/api';
 import { formatRelative, safeHref } from '../lib/format';
 import { useRefreshAnalysis } from '../lib/hooks';
@@ -28,7 +29,15 @@ export function NewsSummary({ envelope, ticker, name }: { envelope: NewsEnvelope
   const list = (title: string, items: string[], tone: 'up' | 'down') => (
     <section className="group">
       <h3>{title}</h3>
-      {items.length === 0 ? <div className="row-hint pad">Nichts Belastbares in den Meldungen.</div> : <ul className={`bullets bullets-${tone}`}>{items.map((t) => <li key={t}>{t}</li>)}</ul>}
+      {items.length === 0 ? (
+        <div className="row-hint pad">Nichts Belastbares in den Meldungen.</div>
+      ) : (
+        <ul className={`bullets bullets-${tone}`}>
+          {items.map((t) => (
+            <li key={t}>{t}</li>
+          ))}
+        </ul>
+      )}
     </section>
   );
   return (
@@ -54,7 +63,14 @@ export function NewsSummary({ envelope, ticker, name }: { envelope: NewsEnvelope
   );
 }
 
+/** Meldungen, die die KI als Rauschen bewertet hat (Relevanz 1), sind zunächst eingeklappt. */
+const isNoise = (rating: NewsEnvelope['analysis']['byId'][string] | undefined) => rating !== undefined && rating.relevance <= 1;
+
 export function NewsList({ data, analysis }: { data: NewsResponse; analysis?: NewsEnvelope['analysis'] }) {
+  const [showAll, setShowAll] = useState(false);
+  const hidden = data.items.filter((n) => isNoise(analysis?.byId[n.id])).length;
+  const visible = showAll ? data.items : data.items.filter((n) => !isNoise(analysis?.byId[n.id]));
+
   return (
     <div>
       {data.errors.length > 0 && (
@@ -65,11 +81,24 @@ export function NewsList({ data, analysis }: { data: NewsResponse; analysis?: Ne
       {data.items.length === 0 ? (
         <div className="center-note">Keine aktuellen Meldungen gefunden.</div>
       ) : (
-        <ul className="list news">
-          {data.items.map((n) => (
-            <NewsRow key={n.id} item={n} rating={analysis?.byId[n.id]} />
-          ))}
-        </ul>
+        <>
+          {visible.length === 0 ? (
+            <div className="center-note">Alle Meldungen wurden als wenig relevant eingestuft.</div>
+          ) : (
+            <ul className="list news">
+              {visible.map((n) => (
+                <NewsRow key={n.id} item={n} rating={analysis?.byId[n.id]} />
+              ))}
+            </ul>
+          )}
+          {hidden > 0 && (
+            <div className="stack">
+              <button type="button" className="btn btn-small btn-secondary" onClick={() => setShowAll((v) => !v)}>
+                {showAll ? 'Weniger relevante Meldungen ausblenden' : `${hidden} weniger relevante Meldung${hidden === 1 ? '' : 'en'} einblenden`}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
