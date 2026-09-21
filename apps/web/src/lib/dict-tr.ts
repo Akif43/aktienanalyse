@@ -335,6 +335,8 @@ export const tr: Record<DictKey, string> = {
   'news.pressTitle': 'Basın',
   'news.pressText': 'Basında çıkan haberler. Resmî bildirimleri tamamlar, ancak çoğu zaman yorum ya da tekrardır.',
   'news.noKap': 'Bu dönemde resmî KAP bildirimi olmadı.',
+  'news.alsoReported': '+{n} haber daha',
+  'news.sortHint': 'Hisse üzerindeki olası etkiye göre sıralı, en önemliler önce.',
   'news.tapHint': 'Bir habere dokun: Yapay zekâ haberi açıklar ve hisse için ne anlama gelebileceğini değerlendirir.',
   'item.back': '‹ Tüm haberler',
   'item.reading': 'Yapay zekâ haberi okuyor …',

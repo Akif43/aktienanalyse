@@ -54,14 +54,30 @@ export function NewsSummary({ envelope, ticker, name }: { envelope: NewsEnvelope
   );
 }
 
-/** Meldungen, die die KI als Rauschen bewertet hat (Wichtigkeit 1), sind zunächst eingeklappt. */
-const isNoise = (rating: Rating | undefined) => rating !== undefined && rating.relevance <= 1;
+/**
+ * Zunächst eingeklappt: Rauschen (Wichtigkeit 1) und bei Presseartikeln auch nur lose verbundene Meldungen (Wichtigkeit 2).
+ * Offizielle KAP-Meldungen bleiben ab Wichtigkeit 2 sichtbar. Ungeprüfte Meldungen bleiben sichtbar.
+ */
+export function isHiddenByDefault(rating: Rating | undefined, kind: NewsItem['kind']): boolean {
+  if (!rating) return false;
+  return rating.relevance <= 1 || (kind !== 'kap' && rating.relevance <= 2);
+}
+
+/**
+ * Ordnet Meldungen nach vermuteter Wirkung auf die Aktie: erst die mit hoher Wichtigkeit (5, 4, 3), dann ungeprüfte, dann
+ * die unwichtigen. Innerhalb gleicher Stufe gilt: neueste zuerst. Ohne KI-Bewertung bleibt die zeitliche Reihenfolge.
+ */
+export function sortByImpact(items: NewsItem[], byId: NewsEnvelope['analysis']['byId'] | undefined): NewsItem[] {
+  const rank = (n: NewsItem) => byId?.[n.id]?.relevance ?? 2.5;
+  return [...items].sort((a, b) => rank(b) - rank(a) || b.publishedAt - a.publishedAt);
+}
 
 export function NewsList({ data, analysis, isBist = false, onOpen }: { data: NewsResponse; analysis?: NewsEnvelope['analysis']; isBist?: boolean; onOpen: (id: string) => void }) {
   const { t } = useT();
   const [showAll, setShowAll] = useState(false);
-  const hidden = data.items.filter((n) => isNoise(analysis?.byId[n.id])).length;
-  const visible = showAll ? data.items : data.items.filter((n) => !isNoise(analysis?.byId[n.id]));
+  const hidden = data.items.filter((n) => isHiddenByDefault(analysis?.byId[n.id], n.kind)).length;
+  const shown = showAll ? data.items : data.items.filter((n) => !isHiddenByDefault(analysis?.byId[n.id], n.kind));
+  const visible = sortByImpact(shown, analysis?.byId);
   // Offizielle KAP-Meldungen stehen immer vor den Medien, jeweils die neuesten zuerst
   const official = visible.filter((n) => n.kind === 'kap');
   const press = visible.filter((n) => n.kind !== 'kap');
@@ -140,6 +156,7 @@ function NewsRow({ item, rating, onOpen }: { item: NewsItem; rating?: Rating; on
           <time dateTime={new Date(item.publishedAt).toISOString()}>{formatRelative(item.publishedAt)}</time>
           {rating && sentimentClass && <span className={`tag ${sentimentClass}`}>{t(`sent.${rating.sentiment}` as const)}</span>}
           {rating && rating.relevance >= 4 && <span className="tag tag-important">{t('news.important')}</span>}
+          {item.alsoReported ? <span className="tag">{t('news.alsoReported', { n: item.alsoReported })}</span> : null}
         </div>
         <div className="news-title" lang={translated ? lang : item.language}>
           {translated ? local : item.title}

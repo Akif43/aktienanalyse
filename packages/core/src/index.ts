@@ -16,6 +16,8 @@ export * from './adapters/market/fallback';
 
 export * from './adapters/news/types';
 export * from './adapters/news/query';
+export * from './adapters/news/score';
+export * from './adapters/news/story';
 export * from './adapters/news/google-news-rss';
 export * from './adapters/news/kap';
 export * from './adapters/news/finnhub-news';

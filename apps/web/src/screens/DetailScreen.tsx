@@ -236,7 +236,7 @@ function NewsTab({ ticker, name, isBist, selectedId, onOpen, onClose }: { ticker
               <NewsSummary envelope={rating.data} ticker={ticker} name={name} />
             ))}
           <h2 className="section-title">{t('news.listTitle')}</h2>
-          <p className="row-hint">{t('news.tapHint')}</p>
+          <p className="row-hint">{t('news.tapHint')} {rating.data ? t('news.sortHint') : ''}</p>
           <NewsList data={news.data} analysis={rating.data?.analysis} isBist={isBist} onOpen={onOpen} />
           <p className="row-hint pad">{t('news.footnote')}</p>
         </>

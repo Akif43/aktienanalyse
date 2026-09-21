@@ -167,7 +167,7 @@ export class AnalysisService {
       force: opts.force ?? false,
       prepare: async (llm) => {
         const { items } = await this.deps.news.getNews(inst);
-        const selected = selectNewsItems(items);
+        const selected = selectNewsItems(items, undefined, inst, this.now());
         const { payload, idMap } = buildNewsPayload(inst, selected, new Date(this.now()), lang);
         return {
           inputHash: hashString(`${NEWS_PROMPT_VERSION}|${selected.map((n) => n.id).sort().join(',')}`),

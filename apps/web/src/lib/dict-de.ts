@@ -337,6 +337,8 @@ export const de = {
   'news.pressTitle': 'Medien',
   'news.pressText': 'Berichte der Presse. Sie ergänzen die offiziellen Meldungen, sind aber oft Meinung oder Wiederholung.',
   'news.noKap': 'In diesem Zeitraum gab es keine offiziellen KAP-Meldungen.',
+  'news.alsoReported': '+{n} weitere Berichte',
+  'news.sortHint': 'Sortiert nach vermuteter Wirkung auf die Aktie, die wichtigsten zuerst.',
   'news.tapHint': 'Tippe auf eine Meldung: Die KI erklärt sie und ordnet ein, was sie für die Aktie bedeuten könnte.',
   'item.back': '‹ Alle Meldungen',
   'item.reading': 'Die KI liest die Meldung …',

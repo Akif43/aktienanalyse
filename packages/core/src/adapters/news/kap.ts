@@ -146,5 +146,6 @@ function toNewsItems(d: KapDisclosure, wanted: ReadonlySet<string>): NewsItem[] 
       publishedAt,
       language: 'tr' as const,
       category: d.subject?.trim() || undefined,
+      issuer: d.kapTitle?.trim() || undefined,
     }));
 }

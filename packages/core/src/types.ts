@@ -81,4 +81,8 @@ export interface NewsItem {
   language: 'tr' | 'de' | 'en';
   /** Meldungsart bei KAP (z. B. "Özel Durum Açıklaması (Genel)"). */
   category?: string;
+  /** Wer die KAP-Meldung veröffentlicht hat (Firmenname). Weicht er vom Firmennamen der Aktie ab, ist es meist eine Meldung von Börse oder Takasbank. */
+  issuer?: string;
+  /** Bei Presse: Zahl weiterer Berichte zur selben Geschichte, die zu dieser Meldung zusammengefasst wurden. */
+  alsoReported?: number;
 }

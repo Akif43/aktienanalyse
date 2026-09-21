@@ -5,6 +5,7 @@ import { FinnhubNewsAdapter } from './finnhub-news';
 import { GoogleNewsRssAdapter } from './google-news-rss';
 import { KapAdapter } from './kap';
 import { applyQuery } from './query';
+import { groupStories } from './story';
 import type { NewsAdapter, NewsQuery } from './types';
 
 export interface NewsResult {
@@ -31,7 +32,8 @@ export class NewsService {
       }
     });
     const wanted = query.kind === undefined ? items : items.filter((i) => i.kind === query.kind);
-    return { items: applyQuery(dedupe(wanted), query), errors };
+    // Dieselbe Geschichte in vielen Medien erscheint nur einmal, mit der Zahl der weiteren Berichte
+    return { items: applyQuery(groupStories(dedupe(wanted), instrument), query), errors };
   }
 }
 
