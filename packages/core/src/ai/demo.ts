@@ -37,6 +37,12 @@ const TEXT = {
     horizonComment: 'Demo: Platzhalter.',
     reason: 'Demo: keine echte Einordnung.',
     newsSummary: 'Demo-Text ohne KI: Die Meldungen wurden nicht inhaltlich bewertet.',
+    itemSummary: 'Demo-Text: Diese Meldung wurde nicht von einer KI zusammengefasst.',
+    itemShort: 'Demo: Die kurzfristige Wirkung wurde nicht bewertet.',
+    itemLong: 'Demo: Die langfristige Wirkung wurde nicht bewertet.',
+    itemPro: 'Demo: Platzhalter für einen möglichen Vorteil.',
+    itemCon: 'Demo: Platzhalter für ein mögliches Risiko.',
+    itemWatch: 'Demo: Platzhalter für einen Punkt, auf den man achten kann.',
   },
   tr: {
     plainHeadline: 'Gerçek yapay zekâ olmadan demo metni',
@@ -52,6 +58,12 @@ const TEXT = {
     horizonComment: 'Demo: yer tutucu.',
     reason: 'Demo: gerçek bir değerlendirme değil.',
     newsSummary: 'Yapay zekâsız demo metni: Haberler içerik olarak değerlendirilmedi.',
+    itemSummary: 'Demo metni: Bu haber yapay zekâ ile özetlenmedi.',
+    itemShort: 'Demo: Kısa vadeli etki değerlendirilmedi.',
+    itemLong: 'Demo: Uzun vadeli etki değerlendirilmedi.',
+    itemPro: 'Demo: Olumlu yön için yer tutucu.',
+    itemCon: 'Demo: Olumsuz yön için yer tutucu.',
+    itemWatch: 'Demo: Takip edilecek nokta için yer tutucu.',
   },
 } as const;
 
@@ -66,7 +78,7 @@ export class DemoProvider implements LLMProvider {
   async generateJSON(req: GenerateRequest): Promise<GenerateResult> {
     const payload = extractPayload(req.prompt);
     const lang: Lang = payload.ausgabeSprache === 'tr' ? 'tr' : 'de';
-    const data = req.task === 'news' ? this.news(payload, lang) : this.technical(payload, lang);
+    const data = req.task === 'news' ? this.news(payload, lang) : req.task === 'news-item' ? this.newsItem(payload, lang) : this.technical(payload, lang);
     return { data, raw: JSON.stringify(data), provider: this.id, model: this.model, usage: { inputTokens: 0, outputTokens: 0 } };
   }
 
@@ -92,6 +104,21 @@ export class DemoProvider implements LLMProvider {
       targets: verdict === 'bearish' ? [] : t.map((x: any) => ({ candidateId: x.id, comment: T.pickComment })),
       horizon: 'mittelfristig',
       horizonComment: T.horizonComment,
+    };
+  }
+
+  private newsItem(p: any, lang: Lang) {
+    const T = TEXT[lang];
+    return {
+      titleLocal: p.meldung?.titel ?? '',
+      summary: T.itemSummary,
+      sentiment: 'neutral',
+      relevance: p.meldung?.quelleArt === 'offiziell (KAP)' ? 3 : 2,
+      impact: { shortTerm: T.itemShort, longTerm: T.itemLong },
+      positives: [T.itemPro],
+      negatives: [T.itemCon],
+      watch: [T.itemWatch],
+      certainty: 'niedrig',
     };
   }
 

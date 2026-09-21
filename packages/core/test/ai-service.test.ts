@@ -80,7 +80,19 @@ function fakeLlm(behavior: { fail?: () => Error | null } = {}) {
       const err = behavior.fail?.();
       if (err) throw err;
       const data =
-        req.task === 'news'
+        req.task === 'news-item'
+          ? {
+              titleLocal: 'Titel',
+              summary: 'Die Firma kauft eigene Aktien zurück.',
+              sentiment: 'positiv',
+              relevance: 3,
+              impact: { shortTerm: 'Könnte den Kurs stützen.', longTerm: 'Offen.' },
+              positives: ['Weniger Aktien im Umlauf.'],
+              negatives: ['Geld fehlt anderswo.'],
+              watch: ['Folgemeldungen.'],
+              certainty: 'hoch',
+            }
+          : req.task === 'news'
           ? {
               items: (JSON.parse(/```json\s*([\s\S]*?)\s*```/.exec(req.prompt)![1]!).items as { id: string }[]).map((n) => ({ id: n.id, sentiment: 'neutral', relevance: 2, titleLocal: 'Titel', reason: 'Grund.' })),
               overall: { summary: 'Gemischt.', argumentsFor: [], argumentsAgainst: [] },
@@ -105,7 +117,7 @@ function fakeLlm(behavior: { fail?: () => Error | null } = {}) {
   return { llm, requests };
 }
 
-function setup(opts: { news?: NewsItem[]; dailyLimit?: number; llm?: LLMProvider | null; kv?: KeyValueStore } = {}) {
+function setup(opts: { news?: NewsItem[]; dailyLimit?: number; llm?: LLMProvider | null; kv?: KeyValueStore; kapText?: (item: NewsItem) => Promise<string | null> } = {}) {
   const clock = { now: T0 };
   const m = fakeMarket();
   const n = fakeNews(opts.news);
@@ -116,6 +128,7 @@ function setup(opts: { news?: NewsItem[]; dailyLimit?: number; llm?: LLMProvider
     kv,
     market: m.market,
     news: n.service,
+    kapText: opts.kapText,
     now: () => clock.now,
     dailyLimit: opts.dailyLimit,
   });
@@ -335,6 +348,68 @@ describe('AnalysisService: offizielle KAP-Meldungen in der technischen Auswertun
     expect(technicalInputHash(snap, ['a', 'b'])).toBe(technicalInputHash(snap, ['b', 'a']));
     expect(technicalInputHash(snap, ['a'])).not.toBe(technicalInputHash(snap, ['a', 'b']));
     expect(technicalInputHash(snap)).toBe(technicalInputHash(snap, []));
+  });
+});
+
+describe('AnalysisService: einzelne Meldung', () => {
+  const promptPayload = (req: GenerateRequest) => JSON.parse(/```json\s*([\s\S]*?)\s*```/.exec(req.prompt)![1]!);
+  const kapItem: NewsItem = { ...item('kap:1666262:THYAO', 'kap'), title: 'Pay Geri Alım İşlemleri', category: 'Özel Durum Açıklaması (Genel)' };
+  const pressItem = item('gn:1');
+
+  it('KAP: liest den Volltext, die KI bekommt ihn, die Antwort trägt die Grundlage "Volltext"', async () => {
+    const kapText = vi.fn(async () => 'Şirketimiz 500.000 adet pay geri almıştır.');
+    const { service, llm } = setup({ news: [kapItem, pressItem], kapText });
+    const r = await service.newsItem(THYAO, kapItem.id, { lang: 'tr' });
+    expect(kapText).toHaveBeenCalledTimes(1);
+    const payload = promptPayload(llm.requests[0]!);
+    expect(payload.meldung).toMatchObject({ quelleArt: 'offiziell (KAP)', grundlage: 'Volltext', volltext: 'Şirketimiz 500.000 adet pay geri almıştır.' });
+    expect(payload.ausgabeSprache).toBe('tr');
+    expect(r.analysis).toMatchObject({ basis: 'fulltext', sentiment: 'positiv' });
+    expect(r.meta.cached).toBe(false);
+  });
+
+  it('Presse: kein Textabruf, Grundlage ist nur die Überschrift (Sicherheit höchstens "mittel")', async () => {
+    const kapText = vi.fn(async () => 'egal');
+    const { service, llm } = setup({ news: [kapItem, pressItem], kapText });
+    const r = await service.newsItem(THYAO, pressItem.id);
+    expect(kapText).not.toHaveBeenCalled();
+    expect(promptPayload(llm.requests[0]!).meldung.grundlage).toBe('nur Überschrift');
+    expect(r.analysis.basis).toBe('headline');
+    expect(r.analysis.certainty).toBe('mittel');
+  });
+
+  it('KAP-Text nicht abrufbar (null oder Fehler): Auswertung läuft mit der Überschrift weiter', async () => {
+    for (const kapText of [async () => null, async () => Promise.reject(new Error('geblockt'))]) {
+      const { service } = setup({ news: [kapItem], kapText });
+      expect((await service.newsItem(THYAO, kapItem.id)).analysis.basis).toBe('headline');
+    }
+    const noFetcher = setup({ news: [kapItem] });
+    expect((await noFetcher.service.newsItem(THYAO, kapItem.id)).analysis.basis).toBe('headline');
+  });
+
+  it('speichert je Meldung und Sprache: zweiter Aufruf ohne KI-Anfrage und ohne neuen Textabruf', async () => {
+    const kapText = vi.fn(async () => 'Metin uzun bir açıklamadır ve yeterince uzundur.');
+    const { service, llm, clock } = setup({ news: [kapItem], kapText });
+    await service.newsItem(THYAO, kapItem.id, { lang: 'de' });
+    clock.now += 20 * 60_000;
+    const again = await service.newsItem(THYAO, kapItem.id, { lang: 'de' });
+    expect(again.meta.cached).toBe(true);
+    expect(llm.requests).toHaveLength(1);
+    expect(kapText).toHaveBeenCalledTimes(1);
+    await service.newsItem(THYAO, kapItem.id, { lang: 'tr' });
+    expect(llm.requests).toHaveLength(2);
+  });
+
+  it('unbekannte Meldungs-ID: NOT_FOUND, keine KI-Anfrage', async () => {
+    const { service, llm } = setup({ news: [kapItem] });
+    const err = await service.newsItem(THYAO, 'kap:1:X').catch((e) => e);
+    expect(err.code).toBe('NOT_FOUND');
+    expect(llm.requests).toHaveLength(0);
+  });
+
+  it('ohne KI-Anbieter: klare CONFIG-Meldung', async () => {
+    const { service } = setup({ news: [kapItem], llm: null });
+    expect((await service.newsItem(THYAO, kapItem.id).catch((e) => e)).code).toBe('CONFIG');
   });
 });
 

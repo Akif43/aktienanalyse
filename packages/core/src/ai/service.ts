@@ -11,6 +11,7 @@ import { DEMO_PROVIDER_ID } from './demo';
 import { computeFxPerformance, type FxPerformance } from './fx';
 import type { KeyValueStore } from './kv';
 import { buildNewsPayload, NEWS_PROMPT_VERSION, runNewsAnalysis, selectNewsItems, type NewsAnalysis } from './news-analysis';
+import { buildNewsItemPayload, NEWS_ITEM_PROMPT_VERSION, runNewsItemAnalysis, type NewsItemDetail } from './news-item';
 import { buildTechnicalPayload, runTechnicalAnalysis, TECHNICAL_PROMPT_VERSION, type TechnicalAnalysis } from './technical-analysis';
 import type { LLMProvider } from './types';
 
@@ -60,6 +61,8 @@ export interface AnalysisDeps {
   kv: KeyValueStore;
   market: MarketDataAdapter;
   news: NewsService;
+  /** Volltext einer KAP-Meldung (bereinigt), `null` wenn nicht verfügbar. Ohne Angabe stützt sich die Auswertung auf Titel und Kurztext. */
+  kapText?: (item: NewsItem) => Promise<string | null>;
   now?: () => number;
   dailyLimit?: number;
 }
@@ -172,6 +175,36 @@ export class AnalysisService {
           skipLlm: selected.length === 0 ? ({ byId: {}, overall: { summary: '', argumentsFor: [], argumentsAgainst: [] }, notes: [] } satisfies NewsAnalysis) : undefined,
           run: async () => {
             const r = await runNewsAnalysis({ llm, payload, idMap, lang });
+            return { analysis: r.analysis, provider: r.provider, model: r.model, attempts: r.attempts, guardRemoved: r.guardRemoved };
+          },
+        };
+      },
+    });
+  }
+
+  // --- Einzelne Meldung ----------------------------------------------------------------------
+
+  /**
+   * Erklärt eine einzelne Meldung und ordnet ein, was sie für die Aktie bedeuten könnte. Die Meldung wird über ihre ID in der
+   * aktuellen Meldungsliste gesucht (kein frei übergebener Text). Bei KAP-Meldungen liest die KI den Volltext.
+   */
+  async newsItem(instrument: Instrument, itemId: string, opts: AnalysisOptions = {}): Promise<Envelope<NewsItemDetail>> {
+    const inst: Instrument = { ...instrument, name: opts.name ?? instrument.name };
+    const lang = opts.lang ?? DEFAULT_LANG;
+    return this.cached<NewsItemDetail>({
+      key: `analysis:newsitem:${instrumentKey(inst)}:${hashString(itemId)}:${lang}`,
+      promptVersion: NEWS_ITEM_PROMPT_VERSION,
+      force: opts.force ?? false,
+      prepare: async (llm) => {
+        const { items } = await this.deps.news.getNews(inst);
+        const item = items.find((n) => n.id === itemId);
+        if (!item) throw new AdapterError('NOT_FOUND', 'Die Meldung ist nicht mehr in der Liste.', 'analysis');
+        const fullText = item.kind === 'kap' && this.deps.kapText ? await this.deps.kapText(item).catch(() => null) : null;
+        const { payload, basis } = buildNewsItemPayload(inst, item, fullText, new Date(this.now()), lang);
+        return {
+          inputHash: hashString(`${NEWS_ITEM_PROMPT_VERSION}|${item.id}|${basis}|${fullText?.length ?? 0}`),
+          run: async () => {
+            const r = await runNewsItemAnalysis({ llm, payload, basis, lang });
             return { analysis: r.analysis, provider: r.provider, model: r.model, attempts: r.attempts, guardRemoved: r.guardRemoved };
           },
         };

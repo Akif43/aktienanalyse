@@ -23,6 +23,7 @@ import {
   type Timeframe,
 } from '@aktien/core';
 import type { NewsService } from '@aktien/core';
+import { fetchKapDocumentText } from '@aktien/core/node';
 import { TtlCache } from './cache';
 import { CachingMarket } from './caching-market';
 
@@ -116,7 +117,7 @@ export function createDeps(env: ApiEnv): ApiDeps {
     news,
     search: (q) => searchInstruments(q),
     cache,
-    analysis: new AnalysisService({ llm, kv, market: new CachingMarket(market, cache), news, dailyLimit: Number.isFinite(limit) && limit > 0 ? limit : undefined }),
+    analysis: new AnalysisService({ llm, kv, market: new CachingMarket(market, cache), news, kapText: (item) => fetchKapDocumentText(item), dailyLimit: Number.isFinite(limit) && limit > 0 ? limit : undefined }),
     aiInfo: { configured: llm !== null, providers, storage: persistent ? 'supabase' : 'memory' },
   };
 }
@@ -154,6 +155,8 @@ export function createApi(env: ApiEnv, deps: ApiDeps = createDeps(env)): (req: R
           return json(await analysis(url, deps, cache, 'technical'));
         case 'news-analysis':
           return json(await analysis(url, deps, cache, 'news'));
+        case 'news-item':
+          return json(await newsItem(url, deps, cache));
         default:
           throw new HttpError(404, 'NOT_FOUND', `Unbekannte Route: ${route || '/'}`);
       }
@@ -235,6 +238,23 @@ async function analysis(url: URL, deps: ApiDeps, cache: TtlCache, kind: 'technic
   // TTL 0: nur gleichzeitige gleiche Anfragen zusammenfassen (eine KI-Anfrage), Ergebnisse nicht nachspeichern.
   // Den Zwischenspeicher mit Mindestabstand und Tageslimit führt der Dienst selbst.
   return cache.get<unknown>(`ai:${kind}:${ticker}:${name ?? ''}:${force}:${lang}`, 0, () => (kind === 'technical' ? service.technical(inst, { force, lang }) : service.news(inst, { force, name, lang })));
+}
+
+/** KI-Erklärung einer einzelnen Meldung (`id` aus der Meldungsliste). Bei KAP-Meldungen mit Volltext. */
+async function newsItem(url: URL, deps: ApiDeps, cache: TtlCache) {
+  const service = deps.analysis;
+  if (!service || !service.configured) {
+    throw new HttpError(503, 'AI_NOT_CONFIGURED', 'Die KI-Auswertung ist nicht eingerichtet: Es fehlt ein API-Key (GEMINI_API_KEY oder GROQ_API_KEY).');
+  }
+  const ticker = requireTicker(url);
+  const id = (url.searchParams.get('id') ?? '').trim();
+  if (id.length < 1 || id.length > 200 || /[\u0000-\u001f]/.test(id)) throw new HttpError(400, 'BAD_REQUEST', 'id fehlt oder ist ungültig');
+  const name = (url.searchParams.get('name') ?? '').trim().slice(0, 80) || undefined;
+  const force = ['1', 'true'].includes(url.searchParams.get('refresh') ?? '');
+  const langParam = url.searchParams.get('lang');
+  const lang = isLang(langParam) ? langParam : DEFAULT_LANG;
+  const inst: Instrument = { ...instrumentFrom(ticker), name };
+  return cache.get<unknown>(`ai:item:${ticker}:${name ?? ''}:${id}:${force}:${lang}`, 0, () => service.newsItem(inst, id, { force, name, lang }));
 }
 
 // --- Hilfsfunktionen ---------------------------------------------------------------------------

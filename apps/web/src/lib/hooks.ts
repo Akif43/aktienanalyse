@@ -1,7 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { marketState, type Timeframe } from '@aktien/core';
 import { useLang } from './i18n';
-import { api, ApiError, type NewsEnvelope, type QuoteResult, type TechnicalEnvelope } from './api';
+import { api, ApiError, type NewsEnvelope, type NewsItemEnvelope, type QuoteResult, type TechnicalEnvelope } from './api';
 import { appStorage, QUOTES_CACHE_KEY } from './storage';
 
 const FAST_POLL_MS = 30_000;
@@ -100,6 +100,31 @@ export function useNewsAnalysis(ticker: string, name: string | undefined, enable
     staleTime: 10 * 60_000,
     retry: false,
     refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Erklärung einer einzelnen Meldung. Wird erst beim Antippen abgerufen, ohne Wiederholung und ohne Neuabruf beim Zurückkehren:
+ * jede neue Meldung kostet eine KI-Anfrage, der Server speichert das Ergebnis je Meldung und Sprache.
+ */
+export function useNewsItem(ticker: string, name: string | undefined, id: string | undefined) {
+  const lang = useLang();
+  return useQuery({
+    queryKey: ['news-item', ticker, id, lang],
+    queryFn: () => api.newsItem(ticker, id!, name, lang),
+    enabled: Boolean(id),
+    staleTime: 30 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useRefreshNewsItem(ticker: string, name: string | undefined, id: string) {
+  const client = useQueryClient();
+  const lang = useLang();
+  return useMutation<NewsItemEnvelope, Error, void>({
+    mutationFn: () => api.newsItem(ticker, id, name, lang, true),
+    onSuccess: (data) => client.setQueryData(['news-item', ticker, id, lang], data),
   });
 }
 

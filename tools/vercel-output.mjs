@@ -17,7 +17,7 @@ import { build } from 'esbuild';
 export const RUNTIME = 'nodejs22.x';
 
 /** Höchstlaufzeit je Funktion in Sekunden. KI-Auswertungen brauchen länger (Modellaufruf, ggf. Anbieterwechsel). */
-export const MAX_DURATION = { default: 30, analysis: 60, 'news-analysis': 60 };
+export const MAX_DURATION = { default: 30, analysis: 60, 'news-analysis': 60, 'news-item': 60 };
 
 export async function buildVercelOutput({ outDir = '.vercel/output', staticDir = 'apps/web/dist', functionsDir = 'apps/api/functions' } = {}) {
   if (!existsSync(staticDir)) throw new Error(`Web-Build fehlt: ${staticDir}. Erst "npm run build:web" ausführen.`);

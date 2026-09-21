@@ -1,7 +1,7 @@
 import type { NewsItem, Sentiment } from '@aktien/core';
 import { useState } from 'react';
 import type { NewsEnvelope, NewsResponse } from '../lib/api';
-import { formatRelative, safeHref } from '../lib/format';
+import { formatRelative } from '../lib/format';
 import { useRefreshAnalysis } from '../lib/hooks';
 import { useT } from '../lib/i18n';
 import { AnalysisMetaLine, DemoBanner } from './AnalysisCard';
@@ -57,7 +57,7 @@ export function NewsSummary({ envelope, ticker, name }: { envelope: NewsEnvelope
 /** Meldungen, die die KI als Rauschen bewertet hat (Wichtigkeit 1), sind zunächst eingeklappt. */
 const isNoise = (rating: Rating | undefined) => rating !== undefined && rating.relevance <= 1;
 
-export function NewsList({ data, analysis, isBist = false }: { data: NewsResponse; analysis?: NewsEnvelope['analysis']; isBist?: boolean }) {
+export function NewsList({ data, analysis, isBist = false, onOpen }: { data: NewsResponse; analysis?: NewsEnvelope['analysis']; isBist?: boolean; onOpen: (id: string) => void }) {
   const { t } = useT();
   const [showAll, setShowAll] = useState(false);
   const hidden = data.items.filter((n) => isNoise(analysis?.byId[n.id])).length;
@@ -71,7 +71,7 @@ export function NewsList({ data, analysis, isBist = false }: { data: NewsRespons
   const list = (items: NewsItem[]) => (
     <ul className="list news">
       {items.map((n) => (
-        <NewsRow key={n.id} item={n} rating={analysis?.byId[n.id]} />
+        <NewsRow key={n.id} item={n} rating={analysis?.byId[n.id]} onOpen={onOpen} />
       ))}
     </ul>
   );
@@ -120,7 +120,7 @@ export function NewsList({ data, analysis, isBist = false }: { data: NewsRespons
   );
 }
 
-function NewsRow({ item, rating }: { item: NewsItem; rating?: Rating }) {
+function NewsRow({ item, rating, onOpen }: { item: NewsItem; rating?: Rating; onOpen: (id: string) => void }) {
   const { t, lang } = useT();
   const sentimentClass = rating ? SENTIMENT_CLASS[rating.sentiment] : null;
   // Haupttitel in der gewählten Sprache (von der KI übersetzt), das Original steht klein darunter
@@ -128,7 +128,7 @@ function NewsRow({ item, rating }: { item: NewsItem; rating?: Rating }) {
   const translated = Boolean(local && local !== item.title);
   return (
     <li className={rating && rating.relevance >= 4 ? 'news-important' : ''}>
-      <a className="news-row" href={safeHref(item.url)} target="_blank" rel="noopener noreferrer">
+      <button type="button" className="news-row" onClick={() => onOpen(item.id)}>
         <div className="news-meta">
           {item.kind === 'kap' && (
             <span className="tag tag-kap" title={t('news.kapHint')}>
@@ -150,7 +150,7 @@ function NewsRow({ item, rating }: { item: NewsItem; rating?: Rating }) {
             {t('news.original')}: {item.title}
           </div>
         )}
-      </a>
+      </button>
     </li>
   );
 }

@@ -1069,3 +1069,45 @@ code {
 .news-group {
   margin-top: 18px;
 }
+
+/* --- Meldung im Detail ---------------------------------------------------------------------- */
+
+button.news-row {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.news-row::after {
+  content: '›';
+  float: right;
+  margin: -34px 2px 0 8px;
+  font-size: 24px;
+  color: var(--muted);
+}
+.news-detail-title {
+  font-size: 22px;
+  line-height: 1.25;
+  margin: 8px 0 4px;
+}
+.impact-head {
+  padding: 8px 16px 0;
+}
+.impact-text {
+  text-align: left;
+  font-weight: 400;
+}
+.impact .row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.basis-note {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 6px 0;
+}

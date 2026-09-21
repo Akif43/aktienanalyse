@@ -1,4 +1,4 @@
-import type { CandleSeries, Envelope, Lang, NewsAnalysis, NewsItem, Quote, SearchResult, TechnicalAnalysis, Timeframe } from '@aktien/core';
+import type { CandleSeries, Envelope, Lang, NewsItemDetail, NewsAnalysis, NewsItem, Quote, SearchResult, TechnicalAnalysis, Timeframe } from '@aktien/core';
 import { appStorage, TOKEN_KEY } from './storage';
 
 export class ApiError extends Error {
@@ -76,11 +76,13 @@ export interface HealthResponse {
 
 export type TechnicalEnvelope = Envelope<TechnicalAnalysis>;
 export type NewsEnvelope = Envelope<NewsAnalysis>;
+export type NewsItemEnvelope = Envelope<NewsItemDetail>;
 
 export const api = {
   health: () => apiGet<HealthResponse>('health'),
   analysis: (ticker: string, name: string | undefined, lang: Lang, refresh = false) => apiGet<TechnicalEnvelope>('analysis', { s: ticker, name, lang, refresh: refresh ? 1 : undefined }),
   newsAnalysis: (ticker: string, name: string | undefined, lang: Lang, refresh = false) => apiGet<NewsEnvelope>('news-analysis', { s: ticker, name, lang, refresh: refresh ? 1 : undefined }),
+  newsItem: (ticker: string, id: string, name: string | undefined, lang: Lang, refresh = false) => apiGet<NewsItemEnvelope>('news-item', { s: ticker, id, name, lang, refresh: refresh ? 1 : undefined }),
   quotes: (tickers: string[]) => apiGet<{ results: QuoteResult[] }>('quote', { s: tickers.join(',') }),
   candles: (ticker: string, tf: Timeframe) => apiGet<CandleSeries>('candles', { s: ticker, tf }),
   history: (ticker: string) => apiGet<CandleSeries>('history', { s: ticker }),

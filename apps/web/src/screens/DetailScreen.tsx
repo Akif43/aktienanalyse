@@ -1,10 +1,11 @@
 import { computeFxPerformance, computeTechnicalSnapshot, msg as coreMsg, parseInstrument, type FxPerformance, type Market } from '@aktien/core';
 import { useMemo } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AdvancedAnalysis, AiUnavailable, VerdictCard } from '../components/AnalysisCard';
 import { Collapsible } from '../components/Collapsible';
 import { Glance } from '../components/Glance';
 import { Glossary } from '../components/Glossary';
+import { NewsDetail } from '../components/NewsDetail';
 import { NewsList, NewsSummary } from '../components/NewsList';
 import { CandleSection, FxEffect, SimpleChart } from '../components/PriceCharts';
 import { TechPanel } from '../components/TechPanel';
@@ -25,8 +26,11 @@ export function DetailScreen() {
   const ticker = decodeURIComponent(raw).toUpperCase();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
+  const location = useLocation();
   // Ältere Links (?tab=chart) führen zur Übersicht
   const tab = (TAB_VALUES.find((v) => v === params.get('tab')) ?? 'overview') as Tab;
+  // Ist eine Meldung geöffnet, bleibt nur der Aktienname oben: Kurs und Reiter würden von der Erklärung ablenken
+  const itemOpen = tab === 'news' && Boolean(params.get('item'));
 
   const instrument = useMemo(() => {
     try {
@@ -75,7 +79,7 @@ export function DetailScreen() {
         <div className="muted">
           {instrument.symbol} <span className="tag">{marketName(instrument.market)}</span>
         </div>
-        {quote ? (
+        {itemOpen ? null : quote ? (
           <div className="price-block">
             <div className="price">{formatPrice(quote.price, quote.currency)}</div>
             <ChangePill percent={quote.changePercent} change={quote.change} showAbsolute />
@@ -111,10 +115,21 @@ export function DetailScreen() {
         )}
       </header>
 
-      <Segmented options={tabs} value={tab} label={t('detail.tabsAria')} onChange={(v) => setParams({ tab: v }, { replace: true })} />
+      {!itemOpen && <Segmented options={tabs} value={tab} label={t('detail.tabsAria')} onChange={(v) => setParams({ tab: v }, { replace: true })} />}
 
       {tab === 'overview' && <OverviewTab ticker={ticker} market={instrument.market} currency={quote?.currency} name={name} />}
-      {tab === 'news' && <NewsTab key={lang} ticker={ticker} name={name ? newsSearchName(name) : undefined} isBist={instrument.market === 'BIST'} />}
+      {tab === 'news' && (
+        <NewsTab
+          key={lang}
+          ticker={ticker}
+          name={name ? newsSearchName(name) : undefined}
+          isBist={instrument.market === 'BIST'}
+          selectedId={params.get('item') ?? undefined}
+          // Öffnen legt einen Verlaufseintrag an, damit die Zurück-Geste der iPhone-Bedienung zur Liste führt
+          onOpen={(id) => setParams({ tab: 'news', item: id }, { state: { fromList: true } })}
+          onClose={() => (location.state && (location.state as { fromList?: boolean }).fromList ? navigate(-1) : setParams({ tab: 'news' }, { replace: true }))}
+        />
+      )}
       {tab === 'alarme' && (
         <section className="empty">
           <p className="empty-title">{t('alerts.title')}</p>
@@ -190,12 +205,19 @@ function OverviewTab({ ticker, market, currency, name }: { ticker: string; marke
   );
 }
 
-function NewsTab({ ticker, name, isBist }: { ticker: string; name?: string; isBist: boolean }) {
+function NewsTab({ ticker, name, isBist, selectedId, onOpen, onClose }: { ticker: string; name?: string; isBist: boolean; selectedId?: string; onOpen: (id: string) => void; onClose: () => void }) {
   const { t } = useT();
   const news = useNews(ticker, name);
   const hasItems = news.isSuccess && news.data.items.length > 0;
   // Die Einordnung startet erst, wenn Meldungen da sind, und läuft getrennt: die Liste erscheint sofort
   const rating = useNewsAnalysis(ticker, name, hasItems);
+
+  // Eine Meldung ist geöffnet: Erklärung und Einschätzung statt der Liste
+  if (selectedId) {
+    const item = news.data?.items.find((n) => n.id === selectedId);
+    return <NewsDetail ticker={ticker} name={name} item={item} listRating={rating.data?.analysis.byId[selectedId]} listLoading={news.isPending} onBack={onClose} />;
+  }
+
   return (
     <div>
       <Disclaimer />
@@ -214,7 +236,8 @@ function NewsTab({ ticker, name, isBist }: { ticker: string; name?: string; isBi
               <NewsSummary envelope={rating.data} ticker={ticker} name={name} />
             ))}
           <h2 className="section-title">{t('news.listTitle')}</h2>
-          <NewsList data={news.data} analysis={rating.data?.analysis} isBist={isBist} />
+          <p className="row-hint">{t('news.tapHint')}</p>
+          <NewsList data={news.data} analysis={rating.data?.analysis} isBist={isBist} onOpen={onOpen} />
           <p className="row-hint pad">{t('news.footnote')}</p>
         </>
       )}

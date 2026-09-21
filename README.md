@@ -24,6 +24,7 @@ News/KAP mit Einordnung, Kursanzeige und (später) Push-Alarme als PWA auf dem i
 - **Einfache Ansicht (Standard)** je Aktie: Tageswerte, **Kurzfazit mit Ampel** (Sieht eher gut aus / Gemischtes Bild / Sieht eher schwach aus) in Alltagssprache mit "Das spricht dafür/dagegen", ein **einfacher Kursverlauf** (Tag, Woche, Monat, 6 Monate, Jahr, 5 Jahre) mit Veränderung, Höchst- und Tiefststand, **Auf einen Blick** (einfache Aussagen zu Trend, Jahresspanne und Schwankung, auch ohne KI) und bei BIST-Aktien der **Lira-Effekt** (Entwicklung in Lira, Dollar und Euro).
 - **Details für Fortgeschrittene** (eingeklappt, Zustand wird gemerkt): Kerzenchart mit SMA, Bollinger, RSI, MACD, möglicher Handelsplan (Einstieg, Verlustbremse, Kursziele, Chance-Risiko), ausführliche KI-Begründung, alle Kennzahlen mit kurzen Erklärungen und ein Begriffs-Wörterbuch.
 - **Nachrichten:** je Meldung Positiv/Neutral/Negativ und ein Hinweis "Wichtig", Titel in der gewählten Sprache (von der KI übersetzt, Original darunter), dazu "Kurz gesagt" mit Positivem und Negativem. **Offizielle KAP-Meldungen haben Vorrang:** Sie stehen in einem eigenen Abschnitt vor den Medien, die KI gewichtet sie höher (Presse gilt als zweitrangig und Unbestätigtes wird als solches genannt), und sie fließen bei BIST-Aktien auch in das **Kurzfazit** ein (die neuesten Meldungen der letzten 14 Tage; eine neue Meldung löst nach dem Mindestabstand eine neue Einschätzung aus).
+- **Meldung antippen = Erklärung in der App:** Die KI fasst die Meldung in einfachen Worten zusammen und ordnet ein, was sie für die Aktie bedeuten könnte (kurzfristig, langfristig, was helfen und was belasten könnte, worauf man achten kann), mit Ampel-Einstufung und Angabe, wie gut das belegt ist. **Bei KAP-Meldungen liest die KI den vollständigen Meldungstext** (das offizielle KAP-PDF). **Bei Presseartikeln liegt ihr nur die Überschrift vor**, weil Artikeltexte nicht frei abrufbar sind; die App sagt das ausdrücklich und deckelt die Sicherheit der Einschätzung. Das Original bleibt als Link erreichbar. Abgerufen wird erst beim Antippen, gespeichert je Meldung und Sprache (kostet also pro Meldung höchstens eine KI-Anfrage).
 - **Suche** (BIST, XETRA, US), **Einstellungen** (Sprache, Zugangscode, Verbindungstest, KI-Status, Liste sichern), **PWA** (installierbar, offlinefähige Hülle). Alarme folgen in Phase 5.
 
 ## So verhindert die App erfundene Zahlen
@@ -140,7 +141,7 @@ je API-Route eine eigenständig gebündelte Funktion. Derselbe Handler läuft im
 
 **API** (alle außer `health` mit `Authorization: Bearer <APP_TOKEN>`, sofern gesetzt): `/api/health`, `/api/quote?s=THYAO.IS,AAPL`,
 `/api/candles?s=…&tf=1T|1W|1M|6M|1J|5J`, `/api/history?s=…`, `/api/news?s=…&name=…`, `/api/search?q=…`,
-`/api/analysis?s=…&name=…[&lang=de|tr][&refresh=1]`, `/api/news-analysis?s=…&name=…[&lang=de|tr][&refresh=1]` (503, solange kein KI-Key gesetzt ist).
+`/api/analysis?s=…&name=…[&lang=de|tr][&refresh=1]`, `/api/news-item?s=…&id=<Meldungs-ID>[&name=…][&lang=de|tr][&refresh=1]` (Erklärung einer einzelnen Meldung), `/api/news-analysis?s=…&name=…[&lang=de|tr][&refresh=1]` (503, solange kein KI-Key gesetzt ist).
 
 **KI-Anbieter** sind austauschbar (`LLMProvider`): Gemini → Groq → Ollama (nur lokal), nur konfigurierte werden genutzt, bei Ausfall springt die Kette weiter.
 Ein Claude-Anbieter lässt sich später als weitere Klasse ergänzen, ohne dass sich Auswertung oder Oberfläche ändern.
@@ -171,7 +172,7 @@ Für BIST gibt es gratis **keine offizielle Echtzeitquelle**. Die App ist aussch
 
 ## Tests
 
-`npm test` (315 Tests) prüft unter anderem:
+`npm test` (345 Tests) prüft unter anderem:
 
 - **Indikatoren gegen unabhängige pandas-Referenzwerte** (Toleranz 1e-7), plus von Hand nachgerechnete Fälle.
 - **Adapter** gegen aufgezeichnete Live-Antworten inklusive Fehlerfälle. **KI-Anbieter** (Gemini, Groq, Ollama) gegen nachgebildete Antworten inklusive Kontingent-, Schema- und Key-Fehlern.

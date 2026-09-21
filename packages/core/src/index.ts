@@ -35,5 +35,6 @@ export * from './ai/fx';
 export * from './ai/structured';
 export * from './ai/technical-analysis';
 export * from './ai/news-analysis';
+export * from './ai/news-item';
 export * from './ai/kv';
 export * from './ai/service';

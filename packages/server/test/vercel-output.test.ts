@@ -15,7 +15,7 @@ const RUNNER = fileURLToPath(new URL('./run-function.mjs', import.meta.url));
 describe('Vercel-Ausgabe (Build Output API v3)', () => {
   let dir: string;
   let result: { outDir: string; functions: string[] };
-  const ROUTES = ['analysis', 'candles', 'health', 'history', 'news', 'news-analysis', 'quote', 'search'];
+  const ROUTES = ['analysis', 'candles', 'health', 'history', 'news', 'news-analysis', 'news-item', 'quote', 'search'];
 
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), 'vercel-out-'));
@@ -67,7 +67,7 @@ describe('Vercel-Ausgabe (Build Output API v3)', () => {
       const out = JSON.parse(execFileSync(process.execPath, [RUNNER, file, name], { encoding: 'utf-8', timeout: 30_000 }));
       // Ohne Parameter und ohne API-Keys liefert jede Route eine definierte Antwort statt zu crashen:
       // health 200, KI-Routen 503 (nicht eingerichtet), alle anderen 400 (Parameter fehlt)
-      const expected = name === 'health' ? 200 : name === 'analysis' || name === 'news-analysis' ? 503 : 400;
+      const expected = name === 'health' ? 200 : name === 'analysis' || name === 'news-analysis' || name === 'news-item' ? 503 : 400;
       expect(out).toEqual({
         handlerType: 'function',
         status: expected,

@@ -99,6 +99,58 @@ describe('/api/analysis und /api/news-analysis', () => {
   });
 });
 
+describe('/api/news-item', () => {
+  const stubItem = () =>
+    ({ configured: true, newsItem: vi.fn(async () => ({ analysis: { summary: 'x' }, meta: { cached: false } })) }) as unknown as AnalysisServiceType & { newsItem: ReturnType<typeof vi.fn> };
+
+  it('reicht Instrument, Meldungs-ID, Namen, Sprache und refresh an den Dienst weiter', async () => {
+    const svc = stubItem();
+    const api = createApi({}, { ...baseDeps(), analysis: svc });
+    const res = await get(api, '/api/news-item?s=thyao.is&id=kap%3A1666262%3ATHYAO&name=THY&lang=tr&refresh=1');
+    expect(res.status).toBe(200);
+    expect(svc.newsItem).toHaveBeenCalledWith({ symbol: 'THYAO', market: 'BIST', name: 'THY' }, 'kap:1666262:THYAO', { force: true, name: 'THY', lang: 'tr' });
+  });
+
+  it('prüft die Eingabe: id fehlt, zu lang oder mit Steuerzeichen, unbekannte Sprache fällt auf Deutsch zurück', async () => {
+    const svc = stubItem();
+    const api = createApi({}, { ...baseDeps(), analysis: svc });
+    expect((await get(api, '/api/news-item?s=THYAO.IS')).status).toBe(400);
+    expect((await get(api, '/api/news-item?s=THYAO.IS&id=' + 'a'.repeat(201))).status).toBe(400);
+    expect((await get(api, '/api/news-item?s=THYAO.IS&id=a%00b')).status).toBe(400);
+    expect(svc.newsItem).not.toHaveBeenCalled();
+    await get(api, '/api/news-item?s=THYAO.IS&id=gn:1&lang=fr');
+    expect(svc.newsItem.mock.calls[0]![2]).toMatchObject({ lang: 'de', force: false });
+  });
+
+  it('verlangt das Zugriffstoken und eine eingerichtete KI', async () => {
+    const api = createApi({ APP_TOKEN: 't' }, { ...baseDeps(), analysis: stubItem() });
+    expect((await get(api, '/api/news-item?s=THYAO.IS&id=gn:1')).status).toBe(401);
+    const off = createApi({}, baseDeps());
+    expect((await get(off, '/api/news-item?s=THYAO.IS&id=gn:1')).status).toBe(503);
+  });
+
+  it('Fehler des Dienstes (Meldung nicht mehr in der Liste) kommen als 404 an', async () => {
+    const svc = { configured: true, newsItem: vi.fn(async () => { throw new AdapterError('NOT_FOUND', 'weg', 'analysis'); }) } as unknown as AnalysisServiceType;
+    const res = await get(createApi({}, { ...baseDeps(), analysis: svc }), '/api/news-item?s=THYAO.IS&id=gn:1');
+    expect(res.status).toBe(404);
+    expect((await res.json()).error.code).toBe('NOT_FOUND');
+  });
+
+  it('Gesamtdurchlauf mit Demo-Anbieter: Erklärung der Meldung in beiden Sprachen', async () => {
+    const items: NewsItem[] = [{ id: 'gn:1', symbol: 'THYAO', kind: 'news', title: 'THY yeni uçak siparişi verdi', url: 'https://x', source: 'Presse', publishedAt: Date.now() - 3_600_000, language: 'tr' }];
+    const adapter: NewsAdapter = { id: 'fake', supports: () => true, getNews: async () => items };
+    const analysis = new AnalysisService({ llm: new DemoProvider(), kv: new MemoryKv(), market: {} as MarketDataAdapter, news: new NewsService([adapter]) });
+    const api = createApi({}, { ...baseDeps(), analysis });
+    const de = await (await get(api, '/api/news-item?s=THYAO.IS&id=gn:1')).json();
+    const tr = await (await get(api, '/api/news-item?s=THYAO.IS&id=gn:1&lang=tr')).json();
+    expect(de.analysis).toMatchObject({ basis: 'headline', sentiment: 'neutral' });
+    expect(de.meta.demo).toBe(true);
+    expect(de.analysis.summary).toMatch(/Demo/);
+    expect(tr.analysis.summary).toMatch(/Demo/);
+    expect(tr.analysis.summary).not.toBe(de.analysis.summary);
+  });
+});
+
 describe('Gesamtdurchlauf mit Demo-Anbieter (HTTP → Dienst → Analyse → Speicher)', () => {
   const market: MarketDataAdapter = {
     id: 'fake',
