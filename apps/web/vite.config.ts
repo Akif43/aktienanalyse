@@ -40,10 +40,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: false,
       manifest: {
-        name: 'Aktienanalyse',
-        short_name: 'Aktien',
-        description: 'Persönliche Aktienanalyse für BIST, US und XETRA',
-        lang: 'de',
+        name: 'Borsa',
+        short_name: 'Borsa',
+        description: 'Hisseler sade dille / Aktien einfach erklärt (BIST, US, XETRA)',
         start_url: '/',
         scope: '/',
         display: 'standalone',

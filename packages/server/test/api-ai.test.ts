@@ -49,9 +49,27 @@ describe('/api/analysis und /api/news-analysis', () => {
     const svc = stubService();
     const api = createApi({}, { ...baseDeps(), analysis: svc });
     await get(api, '/api/analysis?s=thyao.is&name=T%C3%BCrk%20Hava&refresh=1');
-    expect(svc.technical).toHaveBeenCalledWith({ symbol: 'THYAO', market: 'BIST', name: 'Türk Hava' }, { force: true });
+    expect(svc.technical).toHaveBeenCalledWith({ symbol: 'THYAO', market: 'BIST', name: 'Türk Hava' }, { force: true, lang: 'de' });
     await get(api, '/api/news-analysis?s=AAPL');
-    expect(svc.news).toHaveBeenCalledWith({ symbol: 'AAPL', market: 'US', name: undefined }, { force: false, name: undefined });
+    expect(svc.news).toHaveBeenCalledWith({ symbol: 'AAPL', market: 'US', name: undefined }, { force: false, name: undefined, lang: 'de' });
+  });
+
+  it('geben die Sprache der KI-Texte weiter und ignorieren unbekannte Sprachen', async () => {
+    const svc = stubService();
+    const api = createApi({}, { ...baseDeps(), analysis: svc });
+    await get(api, '/api/analysis?s=AAPL&lang=tr');
+    await get(api, '/api/news-analysis?s=AAPL&lang=tr');
+    await get(api, '/api/analysis?s=MSFT&lang=fr');
+    expect(svc.technical.mock.calls[0]![1]).toMatchObject({ lang: 'tr' });
+    expect(svc.news.mock.calls[0]![1]).toMatchObject({ lang: 'tr' });
+    expect(svc.technical.mock.calls[1]![1]).toMatchObject({ lang: 'de' });
+  });
+
+  it('trennen gleichzeitige Anfragen in unterschiedlichen Sprachen', async () => {
+    const svc = stubService();
+    const api = createApi({}, { ...baseDeps(), analysis: svc });
+    await Promise.all([get(api, '/api/analysis?s=AAPL&lang=de'), get(api, '/api/analysis?s=AAPL&lang=tr')]);
+    expect(svc.technical).toHaveBeenCalledTimes(2);
   });
 
   it('prüfen die Eingabe', async () => {

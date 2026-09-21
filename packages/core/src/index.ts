@@ -1,4 +1,5 @@
 export * from './types';
+export * from './messages';
 export * from './errors';
 export * from './symbols';
 export * from './format';

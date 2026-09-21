@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ErrorNote, Spinner } from '../components/ui';
 import { useSearch } from '../lib/hooks';
+import { useT } from '../lib/i18n';
 import { useWatchlist, watchlistStore } from '../lib/watchlist';
 
 export function SearchScreen() {
+  const { t, dynamic } = useT();
   const [input, setInput] = useState('');
   const [term, setTerm] = useState('');
   const watch = useWatchlist();
@@ -21,7 +23,7 @@ export function SearchScreen() {
   return (
     <main className="screen">
       <header className="large-header">
-        <h1>Suche</h1>
+        <h1>{t('search.title')}</h1>
       </header>
       <input
         className="search-input"
@@ -30,22 +32,22 @@ export function SearchScreen() {
         autoCapitalize="none"
         autoCorrect="off"
         spellCheck={false}
-        placeholder="Name oder Kürzel, z. B. THYAO, Apple, SAP"
-        aria-label="Aktie suchen"
+        placeholder={t('search.placeholder')}
+        aria-label={t('search.aria')}
         value={input}
         onChange={(e) => setInput(e.target.value)}
         autoFocus
       />
-      <p className="row-hint pad">Durchsucht Borsa Istanbul (BIST), XETRA und US-Börsen.</p>
+      <p className="row-hint pad">{t('search.hint')}</p>
 
       {term.trim() === '' ? null : search.isPending ? (
-        <Spinner label="Suche …" />
+        <Spinner label={t('search.loading')} />
       ) : search.isError ? (
         <ErrorNote error={search.error} onRetry={() => search.refetch()} />
       ) : results.length === 0 ? (
-        <div className="center-note">Keine Treffer für „{term.trim()}“.</div>
+        <div className="center-note">{t('search.noResults', { term: term.trim() })}</div>
       ) : (
-        <ul className="list" aria-label="Suchergebnisse">
+        <ul className="list" aria-label={t('search.results')}>
           {results.map((r) => {
             const added = watch.some((w) => w.ticker === r.ticker.toUpperCase());
             return (
@@ -53,7 +55,7 @@ export function SearchScreen() {
                 <Link to={`/s/${encodeURIComponent(r.ticker)}`} className="watch-link">
                   <div className="watch-left">
                     <div className="watch-symbol">
-                      {r.symbol} <span className="tag">{r.marketLabel}</span>
+                      {r.symbol} <span className="tag">{dynamic(`market.${r.market}`, r.marketLabel)}</span>
                     </div>
                     <div className="watch-name">{r.name}</div>
                   </div>
@@ -61,7 +63,7 @@ export function SearchScreen() {
                 <button
                   type="button"
                   className={`add-btn ${added ? 'added' : ''}`}
-                  aria-label={added ? `${r.symbol} entfernen` : `${r.symbol} zur Watchlist hinzufügen`}
+                  aria-label={added ? t('search.removeAria', { symbol: r.symbol }) : t('search.addAria', { symbol: r.symbol })}
                   onClick={() => (added ? watchlistStore.remove(r.ticker) : watchlistStore.add(r.ticker, r.name))}
                 >
                   {added ? '✓' : '+'}

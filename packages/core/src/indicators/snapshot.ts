@@ -1,3 +1,4 @@
+import { msg, type Msg } from '../messages';
 import type { Candle } from '../types';
 import { ema, sma } from './moving-averages';
 import { atr, bollinger, macd, rsi } from './oscillators';
@@ -45,14 +46,14 @@ export interface TechnicalSnapshot {
   trend: TrendStructure;
   range52w: Range52w | null;
   /** Hinweise auf fehlende Daten, damit weder Anwender noch KI Lücken übersehen. */
-  warnings: string[];
+  warnings: Msg[];
 }
 
 export interface SnapshotOptions {
   pivotLeft?: number;
   pivotRight?: number;
   /** Hinweise der Datenquelle (z. B. verworfene Kerzen), werden in `warnings` übernommen. */
-  extraWarnings?: string[];
+  extraWarnings?: Msg[];
 }
 
 const MIN_BARS = 30;
@@ -84,11 +85,11 @@ export function computeTechnicalSnapshot(
 
   const closes = candles.map((c) => c.close);
   const price = closes[closes.length - 1]!;
-  const warnings: string[] = [...(opts.extraWarnings ?? [])];
+  const warnings: Msg[] = [...(opts.extraWarnings ?? [])];
   const gaps = findGaps(candles);
-  if (gaps > 0) warnings.push(`${gaps} Lücke(n) von mehr als ${MAX_NORMAL_GAP_DAYS} Tagen in den letzten 120 Kerzen: Kennzahlen können verzerrt sein.`);
-  if (candles.length < 200) warnings.push(`Nur ${candles.length} Tageskerzen: SMA/EMA 200 und Golden/Death Cross fehlen.`);
-  else if (candles.length < 252) warnings.push(`Nur ${candles.length} Tageskerzen: 52-Wochen-Werte beruhen auf kürzerem Zeitraum.`);
+  if (gaps > 0) warnings.push(msg('gaps', { count: gaps, days: MAX_NORMAL_GAP_DAYS }));
+  if (candles.length < 200) warnings.push(msg('shortHistory200', { bars: candles.length }));
+  else if (candles.length < 252) warnings.push(msg('short52w', { bars: candles.length }));
 
   const maInfo = (values: (number | null)[]): MovingAverageInfo => {
     const v = lastValue(values);

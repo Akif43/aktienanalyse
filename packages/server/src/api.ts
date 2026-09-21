@@ -5,6 +5,8 @@ import {
   createMarketData,
   createNewsService,
   DemoProvider,
+  DEFAULT_LANG,
+  isLang,
   MemoryKv,
   parseInstrument,
   ResilientKv,
@@ -225,10 +227,12 @@ async function analysis(url: URL, deps: ApiDeps, cache: TtlCache, kind: 'technic
   const ticker = requireTicker(url);
   const name = (url.searchParams.get('name') ?? '').trim().slice(0, 80) || undefined;
   const force = ['1', 'true'].includes(url.searchParams.get('refresh') ?? '');
+  const langParam = url.searchParams.get('lang');
+  const lang = isLang(langParam) ? langParam : DEFAULT_LANG;
   const inst: Instrument = { ...instrumentFrom(ticker), name };
   // TTL 0: nur gleichzeitige gleiche Anfragen zusammenfassen (eine KI-Anfrage), Ergebnisse nicht nachspeichern.
   // Den Zwischenspeicher mit Mindestabstand und Tageslimit führt der Dienst selbst.
-  return cache.get<unknown>(`ai:${kind}:${ticker}:${name ?? ''}:${force}`, 0, () => (kind === 'technical' ? service.technical(inst, { force }) : service.news(inst, { force, name })));
+  return cache.get<unknown>(`ai:${kind}:${ticker}:${name ?? ''}:${force}:${lang}`, 0, () => (kind === 'technical' ? service.technical(inst, { force, lang }) : service.news(inst, { force, name, lang })));
 }
 
 // --- Hilfsfunktionen ---------------------------------------------------------------------------

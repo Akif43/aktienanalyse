@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { Disclaimer } from '../components/ui';
+import { Disclaimer, Segmented } from '../components/ui';
 import { api, ApiError, type HealthResponse } from '../lib/api';
+import { LANG_OPTIONS, setLang, useT } from '../lib/i18n';
 import { appStorage, TOKEN_KEY } from '../lib/storage';
 import { useWatchlist, watchlistStore } from '../lib/watchlist';
 
-type TestResult = { ok: true; text: string } | { ok: false; text: string } | null;
+type TestResult = { ok: boolean; text: string } | null;
 
 export function SettingsScreen() {
+  const { t, lang } = useT();
   const [token, setToken] = useState(() => appStorage.getItem(TOKEN_KEY) ?? '');
   const [test, setTest] = useState<TestResult>(null);
   const [busy, setBusy] = useState(false);
@@ -14,16 +16,17 @@ export function SettingsScreen() {
   const [importText, setImportText] = useState('');
   const [importMsg, setImportMsg] = useState('');
   const watch = useWatchlist();
+  const countText = watch.length === 1 ? t('settings.count.one') : t('settings.count.many', { n: watch.length });
 
   const saveToken = () => {
-    const t = token.trim();
+    const value = token.trim();
     try {
-      if (t) appStorage.setItem(TOKEN_KEY, t);
+      if (value) appStorage.setItem(TOKEN_KEY, value);
       else appStorage.removeItem(TOKEN_KEY);
     } catch {
       /* ignorieren */
     }
-    setToken(t);
+    setToken(value);
   };
 
   const runTest = async () => {
@@ -35,9 +38,9 @@ export function SettingsScreen() {
       setAi(health.ai ?? null);
       const { results } = await api.quotes(['AAPL']);
       const q = results[0]?.quote;
-      setTest({ ok: true, text: `Verbindung OK${health.authRequired ? ' (Token akzeptiert)' : ' (kein Token nötig)'}${q ? `, Beispielkurs AAPL: ${q.price}` : ''}` });
+      setTest({ ok: true, text: `${t('settings.connectionOk')}${health.authRequired ? t('settings.tokenAccepted') : t('settings.noTokenNeeded')}${q ? t('settings.exampleQuote', { price: q.price }) : ''}` });
     } catch (e) {
-      setTest({ ok: false, text: e instanceof ApiError ? `${e.message}${e.status === 401 ? '. Token prüfen.' : ''}` : 'Verbindung fehlgeschlagen' });
+      setTest({ ok: false, text: `${t('settings.connectionFailed')}${e instanceof ApiError && e.status === 401 ? `.${t('settings.checkToken')}` : ''}` });
     } finally {
       setBusy(false);
     }
@@ -46,39 +49,47 @@ export function SettingsScreen() {
   const copyExport = async () => {
     try {
       await navigator.clipboard.writeText(watchlistStore.exportJson());
-      setImportMsg('Watchlist in die Zwischenablage kopiert.');
+      setImportMsg(t('settings.copied'));
     } catch {
       setImportText(watchlistStore.exportJson());
-      setImportMsg('Kopieren nicht möglich: der Text steht unten und kann von dort markiert werden.');
+      setImportMsg(t('settings.copyFailed'));
     }
   };
 
   const runImport = () => {
     try {
       const n = watchlistStore.replaceAll(JSON.parse(importText));
-      setImportMsg(`${n} Aktie${n === 1 ? '' : 'n'} importiert.`);
+      setImportMsg(t('settings.imported', { n: n === 1 ? t('settings.count.one') : t('settings.count.many', { n }) }));
       setImportText('');
     } catch {
-      setImportMsg('Der Text ist kein gültiger Export. Es wurde nichts geändert.');
+      setImportMsg(t('settings.importFailed'));
     }
   };
 
   return (
     <main className="screen">
       <header className="large-header">
-        <h1>Einstellungen</h1>
+        <h1>{t('settings.title')}</h1>
       </header>
 
       <section className="group">
-        <h3>Zugriff</h3>
+        <h3>{t('settings.language')}</h3>
+        <div className="pad">
+          <Segmented options={LANG_OPTIONS} value={lang} label={t('settings.language')} onChange={setLang} />
+          <p className="row-hint">{t('settings.languageHint')}</p>
+        </div>
+      </section>
+
+      <section className="group">
+        <h3>{t('settings.access')}</h3>
         <div className="pad">
           <label htmlFor="token" className="row-hint">
-            Zugriffstoken (schützt die Daten-API, wird nur auf diesem Gerät gespeichert)
+            {t('settings.tokenLabel')}
           </label>
-          <input id="token" className="search-input" type="password" autoComplete="off" autoCapitalize="none" autoCorrect="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Leer lassen, wenn keins gesetzt ist" />
+          <input id="token" className="search-input" type="password" autoComplete="off" autoCapitalize="none" autoCorrect="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder={t('settings.tokenPlaceholder')} />
           <div className="stack">
             <button type="button" className="btn" onClick={runTest} disabled={busy}>
-              {busy ? 'Teste …' : 'Speichern und Verbindung testen'}
+              {busy ? t('settings.testing') : t('settings.saveTest')}
             </button>
           </div>
           {test && (
@@ -91,42 +102,37 @@ export function SettingsScreen() {
 
       {ai && (
         <section className="group">
-          <h3>KI-Auswertung</h3>
+          <h3>{t('settings.aiTitle')}</h3>
           <div className="pad">
             {ai.configured ? (
               <p>
-                Aktiv: <strong>{ai.providers.join(' → ')}</strong>
-                {ai.providers.includes('demo') && <span className="tone-down"> (Demo-Modus, keine echte KI)</span>}
+                {t('settings.aiActive', { providers: ai.providers.join(' → ') })}
+                {ai.providers.includes('demo') && <span className="tone-down"> {t('settings.aiDemo')}</span>}
               </p>
             ) : (
-              <p className="tone-down">
-                Nicht eingerichtet. Es fehlt ein KI-Key (<code>GEMINI_API_KEY</code> oder <code>GROQ_API_KEY</code>) auf dem Server.
-              </p>
+              <p className="tone-down">{t('settings.aiMissing')}</p>
             )}
             <p className="row-hint">
-              Zwischenspeicher: {ai.storage === 'supabase' ? 'Supabase (dauerhaft)' : 'nur Arbeitsspeicher des Servers'}.
-              {ai.configured && ai.storage === 'memory' && ' Ohne Supabase gehen Auswertungen bei Kaltstarts verloren und verbrauchen das Gratis-Kontingent schneller.'}
+              {ai.storage === 'supabase' ? t('settings.aiStorageSupabase') : t('settings.aiStorageMemory')}
+              {ai.configured && ai.storage === 'memory' && t('settings.aiStorageWarn')}
             </p>
           </div>
         </section>
       )}
 
       <section className="group">
-        <h3>Watchlist sichern</h3>
+        <h3>{t('settings.backupTitle')}</h3>
         <div className="pad">
-          <p className="row-hint">
-            Die Watchlist liegt in diesem Browser bzw. dieser installierten App ({watch.length} Aktie{watch.length === 1 ? '' : 'n'}). Die installierte iPhone-App hat einen
-            eigenen Speicher, exportiere die Liste also aus Safari und importiere sie in der App. Später wird die Liste auf dem Server gespeichert.
-          </p>
+          <p className="row-hint">{t('settings.backupText', { count: countText })}</p>
           <div className="stack">
             <button type="button" className="btn btn-secondary" onClick={copyExport} disabled={watch.length === 0}>
-              Exportieren (kopieren)
+              {t('settings.exportBtn')}
             </button>
           </div>
-          <textarea className="search-input mono" rows={4} placeholder="Export hier einfügen und importieren" value={importText} onChange={(e) => setImportText(e.target.value)} aria-label="Import-Text" />
+          <textarea className="search-input mono" rows={4} placeholder={t('settings.importPlaceholder')} value={importText} onChange={(e) => setImportText(e.target.value)} aria-label={t('settings.importAria')} />
           <div className="stack">
             <button type="button" className="btn btn-secondary" onClick={runImport} disabled={!importText.trim()}>
-              Importieren (ersetzt die Liste)
+              {t('settings.importBtn')}
             </button>
           </div>
           {importMsg && <p role="status">{importMsg}</p>}
@@ -134,19 +140,19 @@ export function SettingsScreen() {
       </section>
 
       <section className="group">
-        <h3>Über die Daten</h3>
+        <h3>{t('settings.aboutTitle')}</h3>
         <div className="pad">
           <ul className="plain">
-            <li>Kurse und Kerzen: Yahoo Finance (inoffiziell), bei Ausfall İş Yatırım (BIST, nur Tagesschluss), US-Live-Kurse optional über Finnhub.</li>
-            <li>BIST- und XETRA-Kurse sind ca. 15 Minuten verzögert. Für BIST gibt es kostenlos keine Echtzeitquelle.</li>
-            <li>News: KAP (BIST-Pflichtmeldungen) und Google News.</li>
-            <li>Kennzahlen der technischen Analyse werden im Code berechnet. Die KI (Gemini, Ausweichanbieter Groq) schreibt nur den Text dazu und darf keine Zahlen erfinden: Kurse wählt sie aus berechneten Kandidaten, andere Zahlen werden gegen die Eingabedaten geprüft.</li>
+            <li>{t('settings.about1')}</li>
+            <li>{t('settings.about2')}</li>
+            <li>{t('settings.about3')}</li>
+            <li>{t('settings.about4')}</li>
           </ul>
         </div>
       </section>
 
       <Disclaimer />
-      <p className="row-hint pad">Version 0.4 · Phase 4</p>
+      <p className="row-hint pad">{t('settings.version')}</p>
     </main>
   );
 }

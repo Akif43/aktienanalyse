@@ -1,4 +1,5 @@
 import {
+  AreaSeries,
   CandlestickSeries,
   ColorType,
   CrosshairMode,
@@ -11,6 +12,7 @@ import {
 } from 'lightweight-charts';
 import { useEffect, useRef, useState } from 'react';
 import type { CandlePoint, ChartData } from '../lib/chart-data';
+import { localeOf, useT } from '../lib/i18n';
 
 export interface ChartOverlays {
   sma20: boolean;
@@ -25,6 +27,8 @@ export interface LegendValue extends CandlePoint {
 
 interface Props {
   data: ChartData;
+  /** "line": einfacher Kursverlauf für Einsteiger, "candles": Kerzen mit Linien und Anzeigen. */
+  mode?: 'candles' | 'line';
   intraday: boolean;
   overlays: ChartOverlays;
   showVolume: boolean;
@@ -33,9 +37,9 @@ interface Props {
   onLegend: (value: LegendValue | null) => void;
 }
 
-/** Deutsche Zahlenformatierung für die Preisachsen (Lightweight Charts nutzt sonst den Punkt als Dezimaltrenner). */
-const deFormat = (digits: number) => {
-  const nf = new Intl.NumberFormat('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+/** Zahlenformatierung der Preisachsen in der Sprache der App (Lightweight Charts nutzt sonst den Punkt als Dezimaltrenner). */
+const numFormat = (digits: number, locale: string) => {
+  const nf = new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
   return { type: 'custom' as const, minMove: 1 / 10 ** digits, formatter: (v: number) => nf.format(v) };
 };
 
@@ -55,13 +59,16 @@ function useColorScheme(): 'light' | 'dark' {
   return scheme;
 }
 
-export function Chart({ data, intraday, overlays, showVolume, showRsi, showMacd, onLegend }: Props) {
+export function Chart({ data, mode = 'candles', intraday, overlays, showVolume, showRsi, showMacd, onLegend }: Props) {
+  const { t, lang } = useT();
+  const locale = localeOf(lang);
+  const simple = mode === 'line';
   const ref = useRef<HTMLDivElement>(null);
   const scheme = useColorScheme();
   const legendRef = useRef(onLegend);
   legendRef.current = onLegend;
 
-  const subPanes = (showRsi && data.indicators ? 1 : 0) + (showMacd && data.indicators ? 1 : 0);
+  const subPanes = simple ? 0 : (showRsi && data.indicators ? 1 : 0) + (showMacd && data.indicators ? 1 : 0);
   const height = MAIN_HEIGHT + subPanes * SUB_HEIGHT;
 
   useEffect(() => {
@@ -80,13 +87,31 @@ export function Chart({ data, intraday, overlays, showVolume, showRsi, showMacd,
       rightPriceScale: { borderVisible: false },
       timeScale: { borderVisible: false, timeVisible: intraday, secondsVisible: false, rightOffset: 4 },
       crosshair: { mode: CrosshairMode.Normal },
-      localization: { locale: 'de-DE' },
+      localization: { locale },
       handleScale: { axisPressedMouseMove: true },
     });
 
     const lastClose = data.candles.at(-1)!.close;
     const precision = lastClose < 1 ? 4 : 2;
-    const priceFormat = deFormat(precision);
+    const priceFormat = numFormat(precision, locale);
+
+    if (simple) {
+      // Einfacher Kursverlauf: eine Fläche über den Schlusskursen, grün bei Plus im Zeitraum, sonst rot
+      const first = data.candles[0]!.close;
+      const tone = lastClose >= first ? up : down;
+      const area = chart.addSeries(AreaSeries, { lineColor: tone, topColor: `${tone}55`, bottomColor: `${tone}00`, lineWidth: 2, priceFormat, priceLineVisible: false, crosshairMarkerVisible: true }, 0);
+      area.setData(data.candles.map((k) => ({ time: k.time, value: k.close })) as never);
+      chart.subscribeCrosshairMove((param) => {
+        const bar = param.seriesData.get(area) as { value?: number } | undefined;
+        if (!param.time || bar?.value === undefined) return legendRef.current(null);
+        legendRef.current({ time: param.time as never, open: bar.value, high: bar.value, low: bar.value, close: bar.value });
+      });
+      chart.timeScale().fitContent();
+      return () => {
+        legendRef.current(null);
+        chart.remove();
+      };
+    }
 
     const candles = chart.addSeries(
       CandlestickSeries,
@@ -121,14 +146,14 @@ export function Chart({ data, intraday, overlays, showVolume, showRsi, showMacd,
       let pane = 1;
       if (showRsi) {
         const r = line(ind.rsi, c('--accent'), pane, 2);
-        r.applyOptions({ priceFormat: deFormat(0), lastValueVisible: true });
+        r.applyOptions({ priceFormat: numFormat(0, locale), lastValueVisible: true });
         for (const level of [30, 70]) r.createPriceLine({ price: level, color: c('--muted'), lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: false, title: '' });
         pane++;
       }
       if (showMacd) {
         const hist = chart.addSeries(HistogramSeries, { lastValueVisible: false, priceLineVisible: false }, pane);
         hist.setData(ind.macdHist.map((h) => ({ time: h.time, value: h.value, color: h.up ? `${up}99` : `${down}99` })) as never);
-        line(ind.macd, c('--accent'), pane).applyOptions({ priceFormat: deFormat(2) });
+        line(ind.macd, c('--accent'), pane).applyOptions({ priceFormat: numFormat(2, locale) });
         line(ind.macdSignal, c('--c-sma20'), pane);
       }
     }
@@ -150,7 +175,7 @@ export function Chart({ data, intraday, overlays, showVolume, showRsi, showMacd,
       legendRef.current(null);
       chart.remove();
     };
-  }, [data, intraday, overlays.sma20, overlays.sma50, overlays.sma200, overlays.bollinger, showVolume, showRsi, showMacd, scheme]);
+  }, [data, intraday, overlays.sma20, overlays.sma50, overlays.sma200, overlays.bollinger, showVolume, showRsi, showMacd, scheme, simple, locale]);
 
-  return <div ref={ref} className="chart" style={{ height }} role="img" aria-label="Kerzenchart" />;
+  return <div ref={ref} className="chart" style={{ height }} role="img" aria-label={simple ? t('chart.aria') : t('chart.candleAria')} />;
 }

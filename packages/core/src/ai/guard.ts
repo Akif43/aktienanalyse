@@ -19,7 +19,7 @@ const FREE_INTS = new Set([9, 12, 14, 20, 26, 30, 50, 52, 70, 100, 200]);
 const DATE_RE = /\b\d{1,2}\.\d{1,2}\.(?:\d{2,4})?(?!\d)/g;
 const TIME_RE = /\b\d{1,2}:\d{2}(?::\d{2})?\b/g;
 const NUM_RE = /(?<![\p{L}\d_.,])\d+(?:[.,]\d+)*(?![\p{L}\d_])/gu;
-const CURRENCY_AFTER = /^\s{0,2}(?:₺|\$|€|TRY|USD|EUR|Lira|Dollar|Euro)/i;
+const CURRENCY_AFTER = /^\s{0,2}(?:₺|\$|€|TRY|USD|EUR|TL|Lira|Dollar|Euro|dolar|avro)(?![\p{L}])/iu;
 
 /** Alle Lesarten eines Zahlentokens ("1.234,5", "1,234.5", "3,5", "1.234" …). */
 export function readings(token: string): { value: number; decimals: number }[] {
@@ -113,7 +113,7 @@ export function findUnsupported(text: string, allowed: readonly number[]): strin
     .map((n) => n.raw);
 }
 
-const ABBREVIATIONS = /\b(z\. ?B|d\. ?h|u\. ?a|s\. ?o|ca|bzw|Nr|Mio|Mrd|ggf|vgl|inkl|evtl|etc|Std|Min|max|mind)\./gi;
+const ABBREVIATIONS = /(?<![\p{L}])(z\. ?B|d\. ?h|u\. ?a|s\. ?o|ca|bzw|Nr|Mio|Mrd|ggf|vgl|inkl|evtl|etc|Std|Min|max|mind|örn|vb|vs|yak|bkz|dk|sa|milyar|milyon)\./giu;
 const DOT_MASK = '\u0001';
 
 /**
@@ -123,7 +123,7 @@ const DOT_MASK = '\u0001';
 export function splitSentences(text: string): string[] {
   const masked = text.replace(ABBREVIATIONS, (m) => m.replace(/\./g, DOT_MASK));
   return masked
-    .split(/(?<=[.!?])\s+(?=[A-ZÄÖÜ])/)
+    .split(/(?<=[.!?])\s+(?=[A-ZÄÖÜÇĞİŞ])/)
     .map((s) => s.split(DOT_MASK).join('.').trim())
     .filter(Boolean);
 }

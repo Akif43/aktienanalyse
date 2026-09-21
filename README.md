@@ -1,7 +1,7 @@
-# Aktienanalyse-PWA (0 € Budget)
+# Borsa – Aktienanalyse-PWA (0 € Budget)
 
-Persönliche Aktienanalyse für BIST (Borsa Istanbul), US und XETRA. Watchlist, technische Analyse mit KI-Text, News/KAP mit
-Einordnung, Kursanzeige und (später) Push-Alarme als PWA auf dem iPhone, ohne Apple-Developer-Account und ohne bezahlte Dienste.
+Aktien einfach erklärt, auf Deutsch **und Türkisch**: BIST (Borsa Istanbul), US und XETRA. Watchlist, verständliches Kurzfazit mit Ampel,
+News/KAP mit Einordnung, Kursanzeige und (später) Push-Alarme als PWA auf dem iPhone, ohne Apple-Developer-Account und ohne bezahlte Dienste.
 
 > **Keine Anlageberatung.** Alle Auswertungen sind Einordnungen aus öffentlichen Daten, keine Empfehlungen.
 
@@ -12,22 +12,19 @@ Einordnung, Kursanzeige und (später) Push-Alarme als PWA auf dem iPhone, ohne A
 | 1 | Plan, Datenquellen-Vergleich, Push-Lösung, Hosting | erledigt |
 | 2 | Datenanbindung, Indikatoren mit Tests, Watchlist-Speicher | erledigt |
 | 3 | PWA: Watchlist, Kurs, Chart, Suche, installierbar | erledigt (Vercel-Deployment steht noch aus) |
-| **4** | **KI-Auswertung (technisch + News/KAP), TRY/USD/EUR** | **erledigt, aber noch nicht mit echtem KI-Key getestet** |
+| 4 | KI-Auswertung (technisch + News/KAP), TRY/USD/EUR | erledigt, mit echtem Gemini-Key auf Vercel geprüft |
+| **4b** | **Einfache Ansicht für Laien, Deutsch und Türkisch umschaltbar** | **erledigt (türkische Texte bitte gegenlesen)** |
 | 5 | Hintergrund-Überwachung und Push (ntfy, Web Push) | offen |
 | 6 | Feinschliff, Fehlerbehandlung, Deployment-Anleitung | offen |
 
 ## Was die App kann
 
-- **Watchlist** mit Kurs, Tagesänderung, Börsenzeit und Badge **"Echtzeit"** bzw. **"verzögert (ca. 15 Min.)"**, automatisch aktualisiert.
-- **Aktien-Detail** mit Tageshoch/-tief, Vortag, Volumen und den Tabs *Chart & Technik*, *News & Einordnung*, *Alarme* (Alarme folgen in Phase 5).
-- **Candlestick-Chart** (1T bis 5J) mit Volumen, SMA 20/50/200, Bollinger, RSI, MACD. Bei BIST-Aktien lässt sich die **Währung TRY/USD/EUR umschalten**.
-- **Kennzahlen** (im Code berechnet): Trend, Golden/Death Cross, RSI, MACD, Bollinger, ATR, Volumen, Unterstützung/Widerstand, 52-Wochen-Spanne.
-- **KI-Einschätzung** je Aktie: bullish/neutral/bearish, Argumente dafür und dagegen, Risiken, möglicher Einstiegsbereich, Stop-Loss, Kursziele,
-  Chance-Risiko-Verhältnis, Zeithorizont.
-- **News-Einordnung:** je Meldung positiv/neutral/negativ, Relevanz (1 bis 5), Begründung und deutsche Kurzübersetzung türkischer Titel, dazu
-  eine Zusammenfassung mit Argumenten **für und gegen** ein Investment. KAP-Meldungen werden höher gewichtet.
-- **TRY-Inflation:** Bei BIST-Aktien zeigt die App die Kursentwicklung in TRY neben USD und EUR (3 Monate, 6 Monate, 1 Jahr).
-- **Suche** (BIST, XETRA, US), **Einstellungen** (Token, Verbindungstest, KI-Status, Watchlist-Export/-Import), **PWA** (installierbar, offlinefähige Hülle).
+- **Zwei Sprachen:** Deutsch und Türkisch, umschaltbar unter *Einstellungen*. Beim ersten Start gilt die Sprache des Handys (Türkisch, sonst Deutsch). Die Sprache gilt für die ganze Oberfläche **und** für die KI-Texte (eigener Zwischenspeicher je Sprache).
+- **Meine Aktien** mit Name, Kurs, Tagesänderung und einem einfachen Hinweis "Live" bzw. "ca. 15 Min. verzögert", automatisch aktualisiert.
+- **Einfache Ansicht (Standard)** je Aktie: Tageswerte, **Kurzfazit mit Ampel** (Sieht eher gut aus / Gemischtes Bild / Sieht eher schwach aus) in Alltagssprache mit "Das spricht dafür/dagegen", ein **einfacher Kursverlauf** (Tag, Woche, Monat, 6 Monate, Jahr, 5 Jahre) mit Veränderung, Höchst- und Tiefststand, **Auf einen Blick** (einfache Aussagen zu Trend, Jahresspanne und Schwankung, auch ohne KI) und bei BIST-Aktien der **Lira-Effekt** (Entwicklung in Lira, Dollar und Euro).
+- **Details für Fortgeschrittene** (eingeklappt, Zustand wird gemerkt): Kerzenchart mit SMA, Bollinger, RSI, MACD, möglicher Handelsplan (Einstieg, Verlustbremse, Kursziele, Chance-Risiko), ausführliche KI-Begründung, alle Kennzahlen mit kurzen Erklärungen und ein Begriffs-Wörterbuch.
+- **Nachrichten:** je Meldung Positiv/Neutral/Negativ und ein Hinweis "Wichtig", Titel in der gewählten Sprache (von der KI übersetzt, Original darunter), dazu "Kurz gesagt" mit Positivem und Negativem. KAP-Meldungen werden höher gewichtet.
+- **Suche** (BIST, XETRA, US), **Einstellungen** (Sprache, Zugangscode, Verbindungstest, KI-Status, Liste sichern), **PWA** (installierbar, offlinefähige Hülle). Alarme folgen in Phase 5.
 
 ## So verhindert die App erfundene Zahlen
 
@@ -143,7 +140,7 @@ je API-Route eine eigenständig gebündelte Funktion. Derselbe Handler läuft im
 
 **API** (alle außer `health` mit `Authorization: Bearer <APP_TOKEN>`, sofern gesetzt): `/api/health`, `/api/quote?s=THYAO.IS,AAPL`,
 `/api/candles?s=…&tf=1T|1W|1M|6M|1J|5J`, `/api/history?s=…`, `/api/news?s=…&name=…`, `/api/search?q=…`,
-`/api/analysis?s=…&name=…[&refresh=1]`, `/api/news-analysis?s=…&name=…[&refresh=1]` (503, solange kein KI-Key gesetzt ist).
+`/api/analysis?s=…&name=…[&lang=de|tr][&refresh=1]`, `/api/news-analysis?s=…&name=…[&lang=de|tr][&refresh=1]` (503, solange kein KI-Key gesetzt ist).
 
 **KI-Anbieter** sind austauschbar (`LLMProvider`): Gemini → Groq → Ollama (nur lokal), nur konfigurierte werden genutzt, bei Ausfall springt die Kette weiter.
 Ein Claude-Anbieter lässt sich später als weitere Klasse ergänzen, ohne dass sich Auswertung oder Oberfläche ändern.
@@ -174,18 +171,19 @@ Für BIST gibt es gratis **keine offizielle Echtzeitquelle**. Die App ist aussch
 
 ## Tests
 
-`npm test` (275 Tests) prüft unter anderem:
+`npm test` (301 Tests) prüft unter anderem:
 
 - **Indikatoren gegen unabhängige pandas-Referenzwerte** (Toleranz 1e-7), plus von Hand nachgerechnete Fälle.
 - **Adapter** gegen aufgezeichnete Live-Antworten inklusive Fehlerfälle. **KI-Anbieter** (Gemini, Groq, Ollama) gegen nachgebildete Antworten inklusive Kontingent-, Schema- und Key-Fehlern.
-- **Zahlen-Wächter:** deutsche und englische Zahlenformate, Rundung, Datum/Uhrzeit, erfundene Kurse, eingeschleuste Anweisungen.
+- **Sprachen:** deutsches und türkisches Wörterbuch haben dieselben Schlüssel und Platzhalter, Systemmeldungen gibt es in beiden Sprachen, Formate ("1,50 %" bzw. "%1,50"), Spracherkennung, KI-Sprache in Prompt und Zwischenspeicher, Fachbegriffe tauchen in der Einfach-Ansicht nicht auf.
+- **Zahlen-Wächter:** deutsche, türkische und englische Zahlenformate, Rundung, Datum/Uhrzeit, erfundene Kurse, eingeschleuste Anweisungen.
 - **Auswertungen:** Kandidaten und Handelsplan mit echten THYAO-Daten, Währungsumrechnung, Prüfablauf mit Wiederholung, Zwischenspeicher, Mindestabstand, Tageslimit, Ausfälle.
 - **API und Deployment-Artefakt:** Zugriffsschutz, Fehlerabbildung, Supabase-Anbindung, jede Funktion startet in einem frischen Node-Prozess.
 
 Mutationstests bestätigen, dass die Tests echte Fehler finden (z. B. Wächter ohne Satzentfernung, ignoriertes Tageslimit, Stop über Einstieg).
 Manuell geprüft: iPhone-Viewport (hell/dunkel) mit Demo-KI und echten Kursdaten, Fall ohne KI-Key, Service Worker mit Offline-Start, Token-Ablauf.
 
-**Nicht getestet:** die KI-Anbieter mit echtem Key (Antwortqualität, ob Gemini das Schema akzeptiert, echte Kontingente), Vercel selbst, Installation auf einem echten iPhone.
+**Nicht getestet:** die **türkischen KI-Texte mit echtem Gemini** (Qualität und ob der Zahlen-Wächter bei türkischen Sätzen zu streng oder zu locker ist, bisher nur mit dem Demo-Anbieter und Tests), die neue Ansicht auf einem echten iPhone, die türkischen Oberflächentexte durch eine Person, die Türkisch als Muttersprache spricht.
 
 ## Sicherheit
 

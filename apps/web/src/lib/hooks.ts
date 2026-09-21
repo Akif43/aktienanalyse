@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { marketState, type Timeframe } from '@aktien/core';
+import { useLang } from './i18n';
 import { api, ApiError, type NewsEnvelope, type QuoteResult, type TechnicalEnvelope } from './api';
 import { appStorage, QUOTES_CACHE_KEY } from './storage';
 
@@ -80,9 +81,10 @@ export function useNews(ticker: string, name?: string) {
  * jede Abfrage kann eine KI-Anfrage auslösen, und das Gratis-Kontingent ist knapp. Der Server cacht ohnehin.
  */
 export function useAnalysis(ticker: string, name?: string) {
+  const lang = useLang();
   return useQuery({
-    queryKey: ['analysis', ticker],
-    queryFn: () => api.analysis(ticker, name),
+    queryKey: ['analysis', ticker, lang],
+    queryFn: () => api.analysis(ticker, name, lang),
     staleTime: 10 * 60_000,
     retry: false,
     refetchOnWindowFocus: false,
@@ -90,9 +92,10 @@ export function useAnalysis(ticker: string, name?: string) {
 }
 
 export function useNewsAnalysis(ticker: string, name: string | undefined, enabled: boolean) {
+  const lang = useLang();
   return useQuery({
-    queryKey: ['news-analysis', ticker],
-    queryFn: () => api.newsAnalysis(ticker, name),
+    queryKey: ['news-analysis', ticker, lang],
+    queryFn: () => api.newsAnalysis(ticker, name, lang),
     enabled,
     staleTime: 10 * 60_000,
     retry: false,
@@ -103,9 +106,10 @@ export function useNewsAnalysis(ticker: string, name: string | undefined, enable
 /** Erzwingt eine neue Auswertung (Mindestabstand serverseitig) und ersetzt das zwischengespeicherte Ergebnis. */
 export function useRefreshAnalysis(kind: 'analysis' | 'news-analysis', ticker: string, name?: string) {
   const client = useQueryClient();
+  const lang = useLang();
   return useMutation<TechnicalEnvelope | NewsEnvelope, Error, void>({
-    mutationFn: () => (kind === 'analysis' ? api.analysis(ticker, name, true) : api.newsAnalysis(ticker, name, true)),
-    onSuccess: (data) => client.setQueryData([kind, ticker], data),
+    mutationFn: () => (kind === 'analysis' ? api.analysis(ticker, name, lang, true) : api.newsAnalysis(ticker, name, lang, true)),
+    onSuccess: (data) => client.setQueryData([kind, ticker, lang], data),
   });
 }
 

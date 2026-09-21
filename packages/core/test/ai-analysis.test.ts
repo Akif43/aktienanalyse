@@ -11,6 +11,7 @@ import {
   computeTechnicalSnapshot,
   convertCandles,
   DemoProvider,
+  formatMsg,
   makeRateLookup,
   NEWS_JSON_SCHEMA,
   newsOutputSchema,
@@ -26,6 +27,7 @@ import {
   type GenerateRequest,
   type GenerateResult,
   type LLMProvider,
+  type Msg,
   type NewsItem,
 } from '../src';
 import { parseRss } from '../src/adapters/news/google-news-rss';
@@ -34,6 +36,7 @@ import { readFixture, readJsonFixture } from './helpers';
 const ref = readJsonFixture<{ candles: Candle[] }>('thyao-1d.reference.json');
 const snapshot = computeTechnicalSnapshot(ref.candles);
 const candidates = buildCandidates(snapshot);
+const txt = (notes: Msg[]) => notes.map((m) => formatMsg(m, 'de')).join(' ');
 const de = (n: number | null | undefined, digits = 2) => (n === null || n === undefined ? '–' : n.toFixed(digits).replace('.', ','));
 
 /** Fake-KI: liefert nacheinander die vorbereiteten Antworten (Funktion, Wert oder Fehler) und merkt sich die Anfragen. */
@@ -142,8 +145,8 @@ describe('resolvePlan', () => {
   it('ignoriert unbekannte IDs und meldet es', () => {
     const p = pick('E9', 'SL2', ['T1', 'T7']);
     expect(p.entry).toBeNull();
-    expect(p.notes.join(' ')).toMatch(/E9/);
-    expect(p.notes.join(' ')).toMatch(/T7/);
+    expect(txt(p.notes)).toMatch(/E9/);
+    expect(txt(p.notes)).toMatch(/T7/);
     expect(p.riskReward).toBeNull();
   });
 
@@ -151,7 +154,7 @@ describe('resolvePlan', () => {
     const p = pick('E3', 'SL1', ['T1', 'T3']);
     // E3 liegt über R1: Ziel T1 (Unterkante R1) liegt darunter, SL1 (Kurs − 2 ATR) ist okay
     expect(p.targets.map((t) => t.id)).toEqual(['T3']);
-    expect(p.notes.join(' ')).toMatch(/nicht über dem Einstiegsbereich/);
+    expect(txt(p.notes)).toMatch(/nicht über dem Einstiegsbereich/);
 
     const bad = pick('E2', 'SL1', ['T1']);
     expect(bad.stop!.id).toBe('SL1'); // unter E2 (276,25–280,75)? SL1 266,85 liegt darunter: bleibt
@@ -162,7 +165,7 @@ describe('resolvePlan', () => {
       { entryId: 'E1', stopId: 'SLX', targetIds: [] },
     );
     expect(above.stop).toBeNull();
-    expect(above.notes.join(' ')).toMatch(/nicht unter dem Einstieg/);
+    expect(txt(above.notes)).toMatch(/nicht unter dem Einstieg/);
   });
 
   it('entfernt doppelte Ziele und liefert ohne Einstieg kein Verhältnis', () => {
@@ -313,6 +316,12 @@ describe('Technische Auswertung', () => {
   const valid = (over: Record<string, unknown> = {}) => ({
     verdict: 'bearish',
     confidence: 'mittel',
+    plain: {
+      headline: 'Der Kurs ist zuletzt gefallen.',
+      explanation: 'Der Kurs liegt unter dem Durchschnitt der letzten Monate. Die Lage ist eher schwach.',
+      pros: ['Der Kurs ist schon deutlich gefallen.'],
+      cons: ['Der Abwärtstrend ist noch intakt.'],
+    },
     summary: `Der Kurs liegt ${de(Math.abs(snapshot.sma['200'].priceDistancePercent!))} % unter dem SMA 200. Der RSI liegt bei ${de(snapshot.rsi14.value, 1)}.`,
     argumentsFor: [`Der RSI von ${de(snapshot.rsi14.value, 1)} liegt nahe der überverkauften Zone.`],
     argumentsAgainst: ['Die Trendstruktur ist abwärts gerichtet.', 'Der MACD steht unter der Signallinie.'],
@@ -380,7 +389,7 @@ describe('Technische Auswertung', () => {
     expect(r.analysis.summary).toBe('Der Trend ist schwach.');
     expect(r.analysis.argumentsFor).toEqual(['Der RSI ist niedrig.']);
     expect(r.guardRemoved).toBe(2);
-    expect(r.analysis.notes.join(' ')).toMatch(/2 Aussage\(n\) mit nicht belegten Zahlen/);
+    expect(txt(r.analysis.notes)).toMatch(/2 Aussage\(n\) mit nicht belegten Zahlen/);
     expect(JSON.stringify(r.analysis)).not.toMatch(/420|500/);
   });
 
@@ -390,7 +399,7 @@ describe('Technische Auswertung', () => {
     expect(r.analysis.entry.candidate).toBeNull();
     expect(r.analysis.targets).toEqual([]);
     expect(r.analysis.riskReward).toBeNull();
-    expect(r.analysis.notes.join(' ')).toMatch(/E77/);
+    expect(txt(r.analysis.notes)).toMatch(/E77/);
   });
 
   it('erlaubt "kein Einstieg" (null) bei negativer Lage', async () => {
@@ -455,9 +464,9 @@ describe('Nachrichten-Auswertung', () => {
   const { payload, idMap } = buildNewsPayload(inst, items, new Date(NOW));
   const out = (over: Record<string, unknown> = {}) => ({
     items: [
-      { id: 'N1', sentiment: 'positiv', relevance: 5, titleDe: 'THY: Nettogewinn im 2. Quartal 2026 bei 12,5 Milliarden TL', reason: 'Der Gewinn von 12,5 Milliarden TL ist eine kursrelevante Kennzahl.' },
-      { id: 'N2', sentiment: 'neutral', relevance: 1, titleDe: 'Meldung b', reason: 'Allgemeine Meldung.' },
-      { id: 'N3', sentiment: 'negativ', relevance: 3, titleDe: 'Meldung c', reason: 'Belastend.' },
+      { id: 'N1', sentiment: 'positiv', relevance: 5, titleLocal: 'THY: Nettogewinn im 2. Quartal 2026 bei 12,5 Milliarden TL', reason: 'Der Gewinn von 12,5 Milliarden TL ist eine kursrelevante Kennzahl.' },
+      { id: 'N2', sentiment: 'neutral', relevance: 1, titleLocal: 'Meldung b', reason: 'Allgemeine Meldung.' },
+      { id: 'N3', sentiment: 'negativ', relevance: 3, titleLocal: 'Meldung c', reason: 'Belastend.' },
     ],
     overall: { summary: 'Die Nachrichtenlage ist gemischt.', argumentsFor: ['Starker Quartalsgewinn.'], argumentsAgainst: ['Belastende Meldung.'] },
     ...over,
@@ -475,12 +484,12 @@ describe('Nachrichten-Auswertung', () => {
 
   it('meldet fehlende und unbekannte Meldungs-IDs', async () => {
     const o = out();
-    o.items = [o.items[0]!, { id: 'N99', sentiment: 'neutral', relevance: 1, titleDe: 'x', reason: 'y' }] as never;
+    o.items = [o.items[0]!, { id: 'N99', sentiment: 'neutral', relevance: 1, titleLocal: 'x', reason: 'y' }] as never;
     const { llm } = fakeLlm(o);
     const r = await runNewsAnalysis({ llm, payload, idMap });
     expect(Object.keys(r.analysis.byId)).toEqual(['a']);
-    expect(r.analysis.notes.join(' ')).toMatch(/1 Bewertung\(en\) mit unbekannter/);
-    expect(r.analysis.notes.join(' ')).toMatch(/2 Meldung\(en\) wurden von der KI nicht bewertet/);
+    expect(txt(r.analysis.notes)).toMatch(/1 Bewertung\(en\) mit unbekannter/);
+    expect(txt(r.analysis.notes)).toMatch(/2 Meldung\(en\) wurden von der KI nicht bewertet/);
   });
 
   it('entfernt erfundene Zahlen aus Begründung und Gesamteinordnung', async () => {
@@ -489,7 +498,7 @@ describe('Nachrichten-Auswertung', () => {
     const r = await runNewsAnalysis({ llm, payload, idMap });
     expect(r.analysis.overall.summary).toBe('Lage gemischt.');
     expect(r.analysis.overall.argumentsFor).toEqual(['Gewinn 12,5 Milliarden TL.']);
-    expect(r.analysis.notes.join(' ')).toMatch(/nicht belegten Zahlen/);
+    expect(txt(r.analysis.notes)).toMatch(/nicht belegten Zahlen/);
   });
 
   it('prüft das Ausgabeschema (Sentiment, Relevanz 1–5 ganzzahlig)', () => {
@@ -573,7 +582,7 @@ describe('Prompt-Sicherheit', () => {
     const { payload, idMap } = buildNewsPayload({ symbol: 'X', market: 'BIST' }, items, new Date(0));
     // Die Zahl 999 steht im Titel, ist also "belegt". Eine davon abweichende Zahl (1500) wäre dagegen erfunden:
     const evil = {
-      items: [{ id: 'N1', sentiment: 'positiv', relevance: 5, titleDe: 'Kursziel 999 TL', reason: 'Das Kursziel steigt auf 1500 TL.' }],
+      items: [{ id: 'N1', sentiment: 'positiv', relevance: 5, titleLocal: 'Kursziel 999 TL', reason: 'Das Kursziel steigt auf 1500 TL.' }],
       overall: { summary: 'Sehr positiv.', argumentsFor: [], argumentsAgainst: [] },
     };
     const { llm } = fakeLlm(evil, evil);

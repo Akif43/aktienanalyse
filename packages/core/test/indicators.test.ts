@@ -17,6 +17,7 @@ import {
   volumeTrend,
 } from '../src/indicators';
 import type { Candle } from '../src/types';
+import { msg } from '../src';
 import { candlesFromCloses, expectClose, readJsonFixture, triangleWave } from './helpers';
 
 interface Reference {
@@ -278,7 +279,7 @@ describe('computeTechnicalSnapshot (echte THYAO-Daten)', () => {
     expect(snap.range52w?.partial).toBe(false);
     // Die aufgezeichnete Yahoo-Antwort hat echte Lücken (17. und 18.09. fehlen): der Warner muss sie finden.
     expect(snap.warnings).toHaveLength(1);
-    expect(snap.warnings[0]).toMatch(/^1 Lücke/);
+    expect(snap.warnings[0]).toMatchObject({ code: 'gaps', params: { count: 1 } });
     const json = JSON.stringify(snap);
     expect(json).not.toMatch(/NaN|Infinity/);
     expect(JSON.parse(json)).toEqual(snap);
@@ -307,23 +308,23 @@ describe('computeTechnicalSnapshot (echte THYAO-Daten)', () => {
       const cs = base.map((c, i) => ({ ...c, time: 1_700_000_000 + i * DAY }));
       return cs.map((c, i) => (i === cs.length - 1 ? { ...c, time: cs[i - 1]!.time + gapAtEnd * DAY } : c));
     };
-    expect(computeTechnicalSnapshot(build(3)).warnings.filter((w) => /Lücke/.test(w))).toEqual([]);
-    expect(computeTechnicalSnapshot(build(4)).warnings.filter((w) => /Lücke/.test(w))).toEqual([]);
-    const flagged = computeTechnicalSnapshot(build(5)).warnings.filter((w) => /Lücke/.test(w));
+    expect(computeTechnicalSnapshot(build(3)).warnings.filter((w) => w.code === 'gaps')).toEqual([]);
+    expect(computeTechnicalSnapshot(build(4)).warnings.filter((w) => w.code === 'gaps')).toEqual([]);
+    const flagged = computeTechnicalSnapshot(build(5)).warnings.filter((w) => w.code === 'gaps');
     expect(flagged).toHaveLength(1);
-    expect(flagged[0]).toMatch(/^1 Lücke/);
+    expect(flagged[0]).toEqual({ code: 'gaps', params: { count: 1, days: 4 } });
   });
 
   it('übernimmt Hinweise der Datenquelle in die Warnungen', () => {
-    const snap = computeTechnicalSnapshot(ref.candles, { extraWarnings: ['6 Kerzen verworfen'] });
-    expect(snap.warnings).toContain('6 Kerzen verworfen');
+    const snap = computeTechnicalSnapshot(ref.candles, { extraWarnings: [msg('sourceDropped', { count: 6 })] });
+    expect(snap.warnings).toContainEqual({ code: 'sourceDropped', params: { count: 6 } });
   });
 
   it('warnt bei kurzer Historie und lehnt zu wenig Daten ab', () => {
     const short = computeTechnicalSnapshot(ref.candles.slice(-120));
     expect(short.sma['200'].value).toBeNull();
     expect(short.crossSma50Sma200.regime).toBe('unbekannt');
-    expect(short.warnings.some((w) => /200/.test(w))).toBe(true);
+    expect(short.warnings.some((w) => w.code === 'shortHistory200')).toBe(true);
     expect(() => computeTechnicalSnapshot(ref.candles.slice(-10))).toThrow(/Zu wenig Daten/);
   });
 });

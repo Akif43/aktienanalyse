@@ -1,20 +1,22 @@
-import { freshnessLabel, marketState, type Quote } from '@aktien/core';
+import { marketState, type Quote } from '@aktien/core';
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { ApiError } from '../lib/api';
-import { direction, formatPercent, formatSigned } from '../lib/format';
+import { direction, formatPercent, formatSigned, freshnessText } from '../lib/format';
+import { useT, type DictKey } from '../lib/i18n';
 
-/** "Echtzeit" bzw. "verzögert (ca. 15 Min.)" plus Börsenstatus. */
+/** "Live" bzw. "ca. 15 Min. verzögert" plus Börsenstatus. */
 export function FreshnessBadge({ quote }: { quote: Quote }) {
+  const { t, lang } = useT();
   const state = marketState(quote);
   const kind = quote.freshness.kind;
   return (
     <span className="badges">
       <span className={`badge badge-${kind}`}>
         <span className="dot" aria-hidden />
-        {freshnessLabel(quote.freshness)}
+        {freshnessText(quote.freshness, lang)}
       </span>
-      {state !== 'unknown' && <span className={`badge badge-${state}`}>{state === 'open' ? 'Börse offen' : 'Börse geschlossen'}</span>}
+      {state !== 'unknown' && <span className={`badge badge-${state}`}>{state === 'open' ? t('market.open') : t('market.closed')}</span>}
     </span>
   );
 }
@@ -30,10 +32,10 @@ export function ChangePill({ percent, change, showAbsolute = false }: { percent:
 }
 
 export function Disclaimer() {
+  const { t } = useT();
   return (
     <p className="disclaimer" role="note">
-      <strong>Keine Anlageberatung.</strong> Alle Angaben dienen nur der Information, sind ohne Gewähr und können verzögert oder fehlerhaft sein.
-      Kursgewinne der Vergangenheit sagen nichts über die Zukunft aus.
+      <strong>{t('disclaimer.strong')}</strong> {t('disclaimer.text')}
     </p>
   );
 }
@@ -66,33 +68,42 @@ export function Chip({ active, disabled, onClick, children, color }: { active: b
   );
 }
 
-export function Spinner({ label = 'Lädt …' }: { label?: string }) {
+export function Spinner({ label }: { label?: string }) {
+  const { t } = useT();
   return (
     <div className="center-note" role="status">
-      <span className="spinner" aria-hidden /> {label}
+      <span className="spinner" aria-hidden /> {label ?? t('common.loading')}
     </div>
   );
 }
 
-/** Verständliche Fehlermeldung mit Handlungshinweis. */
-export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
-  let text = 'Etwas ist schiefgelaufen.';
+const KNOWN_ERRORS = ['NETWORK', 'UNAUTHORIZED', 'RATE_LIMITED', 'NOT_FOUND', 'BLOCKED', 'UPSTREAM', 'BAD_RESPONSE', 'BAD_REQUEST', 'AI_NOT_CONFIGURED', 'INTERNAL'] as const;
+
+/** Verständliche Fehlermeldung mit Handlungshinweis in der gewählten Sprache (der Servertext bleibt außen vor). */
+export function ErrorNote({ error, onRetry, message }: { error?: unknown; onRetry?: () => void; message?: string }) {
+  const { t } = useT();
+  let text = message ?? t('error.generic');
   let hint = '';
-  if (error instanceof ApiError) {
-    text = error.message;
-    if (error.code === 'NETWORK') hint = 'Prüfe deine Internetverbindung.';
-    else if (error.code === 'UNAUTHORIZED') hint = 'Trage in den Einstellungen das richtige Zugriffstoken ein.';
-    else if (error.code === 'RATE_LIMITED') hint = 'Die Datenquelle bremst gerade. Versuche es in einer Minute erneut.';
-    else if (error.code === 'NOT_FOUND') hint = 'Diese Aktie kennt die Datenquelle nicht.';
-    else if (error.status >= 500) hint = 'Die Datenquelle ist gerade nicht erreichbar.';
-  } else if (error instanceof Error) text = error.message;
+  if (!message && error instanceof ApiError) {
+    const code = KNOWN_ERRORS.find((c) => c === error.code);
+    if (code) {
+      text = t(`error.${code}` as DictKey);
+      const hintKey = `error.${code}.hint` as DictKey;
+      // Hinweise gibt es nur für einen Teil der Codes
+      const h = t(hintKey);
+      if (h !== hintKey) hint = h;
+    } else if (error.status >= 500) {
+      text = t('error.UPSTREAM');
+      hint = t('error.UPSTREAM.hint');
+    }
+  }
   return (
     <div className="error-note" role="alert">
       <div>{text}</div>
       {hint && <div className="muted">{hint}</div>}
       {onRetry && (
         <button type="button" className="btn btn-small" onClick={onRetry}>
-          Erneut versuchen
+          {t('common.retry')}
         </button>
       )}
     </div>
@@ -106,6 +117,7 @@ const icons = {
 };
 
 export function TabBar() {
+  const { t } = useT();
   const tab = (to: string, label: string, icon: keyof typeof icons, end = false) => (
     <NavLink to={to} end={end} className={({ isActive }) => `tab ${isActive ? 'tab-active' : ''}`}>
       <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -115,10 +127,10 @@ export function TabBar() {
     </NavLink>
   );
   return (
-    <nav className="tabbar" aria-label="Hauptnavigation">
-      {tab('/', 'Watchlist', 'list', true)}
-      {tab('/suche', 'Suche', 'search')}
-      {tab('/einstellungen', 'Einstellungen', 'gear')}
+    <nav className="tabbar" aria-label={t('nav.aria')}>
+      {tab('/', t('nav.watchlist'), 'list', true)}
+      {tab('/suche', t('nav.search'), 'search')}
+      {tab('/einstellungen', t('nav.settings'), 'gear')}
     </nav>
   );
 }

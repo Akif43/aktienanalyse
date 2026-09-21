@@ -74,12 +74,13 @@ function fakeLlm(behavior: { fail?: () => Error | null } = {}) {
       const data =
         req.task === 'news'
           ? {
-              items: (JSON.parse(/```json\s*([\s\S]*?)\s*```/.exec(req.prompt)![1]!).items as { id: string }[]).map((n) => ({ id: n.id, sentiment: 'neutral', relevance: 2, titleDe: 'Titel', reason: 'Grund.' })),
+              items: (JSON.parse(/```json\s*([\s\S]*?)\s*```/.exec(req.prompt)![1]!).items as { id: string }[]).map((n) => ({ id: n.id, sentiment: 'neutral', relevance: 2, titleLocal: 'Titel', reason: 'Grund.' })),
               overall: { summary: 'Gemischt.', argumentsFor: [], argumentsAgainst: [] },
             }
           : {
               verdict: 'neutral',
               confidence: 'mittel',
+              plain: { headline: 'Der Kurs bewegt sich seitwärts.', explanation: 'Es gibt keine klare Richtung.', pros: ['Kein starker Absturz.'], cons: ['Kein klarer Aufwärtstrend.'] },
               summary: 'Seitwärts.',
               argumentsFor: ['Dafür.'],
               argumentsAgainst: ['Dagegen.'],
@@ -172,7 +173,7 @@ describe('AnalysisService: technische Auswertung', () => {
     clock.now += 5 * 60_000;
     const blocked = await service.technical(THYAO, { force: true });
     expect(blocked.meta).toMatchObject({ cached: true, refreshBlocked: true });
-    expect(blocked.meta.note).toMatch(/5 Min\./);
+    expect(blocked.meta.note).toEqual({ code: 'refreshTooSoon', params: { minutes: 5 } });
     expect(llm.requests).toHaveLength(1);
 
     clock.now += FORCE_INTERVAL_MS;
@@ -191,7 +192,8 @@ describe('AnalysisService: technische Auswertung', () => {
     failing.on = true;
     const stale = await service.technical(THYAO);
     expect(stale.meta).toMatchObject({ cached: true, stale: true });
-    expect(stale.meta.note).toMatch(/Limit erreicht/);
+    expect(stale.meta.note).toMatchObject({ code: 'analysisFailed' });
+    expect(String(stale.meta.note!.params!.detail)).toMatch(/Limit erreicht/);
 
     const fresh = setup({ llm: fakeLlm({ fail: () => new AdapterError('RATE_LIMITED', 'Limit', 'gemini') }).llm });
     const err = await fresh.service.technical(THYAO).catch((e) => e);
@@ -207,7 +209,8 @@ describe('AnalysisService: technische Auswertung', () => {
     };
     const r = await service.technical(THYAO);
     expect(r.meta).toMatchObject({ cached: true, stale: true });
-    expect(r.meta.note).toMatch(/geblockt/);
+    expect(r.meta.note).toMatchObject({ code: 'dataRefreshFailed' });
+    expect(String(r.meta.note!.params!.detail)).toMatch(/geblockt/);
   });
 
   it('Tageslimit: keine neue KI-Anfrage, alte Auswertung als veraltet bzw. Fehler', async () => {
@@ -219,7 +222,7 @@ describe('AnalysisService: technische Auswertung', () => {
     market.state.bump = 12;
     const stale = await service.technical(THYAO);
     expect(stale.meta).toMatchObject({ cached: true, stale: true });
-    expect(stale.meta.note).toMatch(/Tageslimit/);
+    expect(stale.meta.note).toEqual({ code: 'dailyLimit', params: { limit: 1 } });
 
     const err = await service.technical(AAPL).catch((e) => e);
     expect(err.code).toBe('RATE_LIMITED');
@@ -232,7 +235,7 @@ describe('AnalysisService: technische Auswertung', () => {
 
   it('ignoriert gespeicherte Auswertungen einer anderen Prompt-Version', async () => {
     const kv = new MemoryKv(() => T0);
-    await kv.set('analysis:technical:BIST:THYAO', { promptVersion: -1, createdAt: T0, inputHash: 'x', provider: 'alt', model: 'alt', attempts: 1, guardRemoved: 0, analysis: { veraltet: true } });
+    await kv.set('analysis:technical:BIST:THYAO:de', { promptVersion: -1, createdAt: T0, inputHash: 'x', provider: 'alt', model: 'alt', attempts: 1, guardRemoved: 0, analysis: { veraltet: true } });
     const { service, llm } = setup({ kv });
     const r = await service.technical(THYAO);
     expect(r.meta.provider).toBe('fake');
@@ -290,7 +293,8 @@ describe('AnalysisService: News-Auswertung', () => {
   it('ohne Meldungen: keine KI-Anfrage', async () => {
     const { service, llm } = setup({ news: [] });
     const r = await service.news(THYAO);
-    expect(r.analysis.overall.summary).toMatch(/Keine aktuellen Meldungen/);
+    expect(r.analysis.overall.summary).toBe('');
+    expect(r.analysis.byId).toEqual({});
     expect(r.meta.provider).toBe('none');
     expect(llm.requests).toHaveLength(0);
   });

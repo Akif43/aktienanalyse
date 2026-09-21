@@ -31,3 +31,5 @@ export const appStorage = safeStorage();
 export const TOKEN_KEY = 'aktien.token';
 export const WATCHLIST_KEY = 'aktien.watchlist.v1';
 export const QUOTES_CACHE_KEY = 'aktien.quotes.v1';
+export const LANG_KEY = 'aktien.lang';
+export const DETAILS_KEY = 'aktien.details.open';

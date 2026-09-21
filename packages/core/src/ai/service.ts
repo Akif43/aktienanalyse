@@ -1,5 +1,6 @@
 import { AdapterError } from '../errors';
 import { hashString } from '../hash';
+import { DEFAULT_LANG, formatMsg, msg, type Lang, type Msg } from '../messages';
 import { computeTechnicalSnapshot, type TechnicalSnapshot } from '../indicators/snapshot';
 import type { MarketDataAdapter } from '../adapters/market/types';
 import type { NewsService } from '../adapters/news/service';
@@ -29,7 +30,7 @@ export interface AnalysisMeta {
   stale: boolean;
   /** true, wenn eine manuelle Aktualisierung wegen des Mindestabstands abgelehnt wurde. */
   refreshBlocked: boolean;
-  note?: string;
+  note?: Msg;
   attempts: number;
   guardRemoved: number;
   /** true bei Platzhaltertexten des Demo-Anbieters (keine echte KI). */
@@ -64,6 +65,8 @@ export interface AnalysisDeps {
 export interface AnalysisOptions {
   /** Manuelle Aktualisierung (mit Mindestabstand). */
   force?: boolean;
+  /** Sprache der KI-Texte. Jede Sprache hat ihren eigenen Zwischenspeicher. */
+  lang?: Lang;
   /** Firmenname für die News-Suche. */
   name?: string;
 }
@@ -86,8 +89,9 @@ export class AnalysisService {
   // --- Technische Auswertung -----------------------------------------------------------------
 
   async technical(instrument: Instrument, opts: AnalysisOptions = {}): Promise<Envelope<TechnicalAnalysis>> {
+    const lang = opts.lang ?? DEFAULT_LANG;
     return this.cached<TechnicalAnalysis>({
-      key: `analysis:technical:${instrumentKey(instrument)}`,
+      key: `analysis:technical:${instrumentKey(instrument)}:${lang}`,
       promptVersion: TECHNICAL_PROMPT_VERSION,
       force: opts.force ?? false,
       prepare: async (llm) => {
@@ -96,27 +100,33 @@ export class AnalysisService {
           this.deps.market.getQuote(instrument).catch(() => null),
           this.fxSeries(instrument),
         ]);
-        const dataWarnings: string[] = [];
-        if (history.droppedBars > 0) dataWarnings.push(`Die Datenquelle lieferte ${history.droppedBars} unvollständige Kerzen, sie wurden übersprungen.`);
-        if (history.approximate) dataWarnings.push('Tagesdaten der Ausweichquelle: Eröffnungskurs und Volumen sind angenähert.');
-        if (instrument.market === 'BIST' && fx.length === 0) dataWarnings.push('Wechselkursdaten (USD/EUR) waren nicht verfügbar.');
+        // Die KI liest die Hinweise immer auf Deutsch, unabhängig von der Ausgabesprache
+        const dataWarnings: Msg[] = [];
+        if (history.droppedBars > 0) dataWarnings.push(msg('sourceDropped', { count: history.droppedBars }));
+        if (history.approximate) dataWarnings.push(msg('approximateData'));
+        if (instrument.market === 'BIST' && fx.length === 0) dataWarnings.push(msg('fxUnavailable'));
 
         const snapshot = computeTechnicalSnapshot(history.candles);
         const candidates = buildCandidates(snapshot);
         const tz = MARKET_TIMEZONE[instrument.market];
         const fxPerformance = fx.map((f) => computeFxPerformance(history.candles, f.candles, f.currency, tz)).filter((p) => p.periods.length > 0);
-        const payload = buildTechnicalPayload({
+        const toGerman = (m: Msg) => formatMsg(m, DEFAULT_LANG);
+        const payload = buildTechnicalPayload(
+          {
           instrument: { ...instrument, currency: quote?.currency ?? MARKET_CURRENCY[instrument.market] },
           quote: quote ? { price: quote.price, changePercent: quote.changePercent, dayHigh: quote.dayHigh, dayLow: quote.dayLow, freshness: quote.freshness } : null,
           snapshot,
           candidates,
           fxPerformance,
-          dataWarnings,
-        });
+          dataWarnings: dataWarnings.map(toGerman),
+          lang,
+          },
+          toGerman,
+        );
         return {
           inputHash: technicalInputHash(snapshot),
           run: async () => {
-            const r = await runTechnicalAnalysis({ llm, payload, candidates });
+            const r = await runTechnicalAnalysis({ llm, payload, candidates, lang });
             return { analysis: r.analysis, provider: r.provider, model: r.model, attempts: r.attempts, guardRemoved: r.guardRemoved };
           },
         };
@@ -128,20 +138,21 @@ export class AnalysisService {
 
   async news(instrument: Instrument, opts: AnalysisOptions = {}): Promise<Envelope<NewsAnalysis>> {
     const inst: Instrument = { ...instrument, name: opts.name ?? instrument.name };
+    const lang = opts.lang ?? DEFAULT_LANG;
     return this.cached<NewsAnalysis>({
-      key: `analysis:news:${instrumentKey(inst)}`,
+      key: `analysis:news:${instrumentKey(inst)}:${lang}`,
       promptVersion: NEWS_PROMPT_VERSION,
       force: opts.force ?? false,
       prepare: async (llm) => {
         const { items } = await this.deps.news.getNews(inst);
         const selected = selectNewsItems(items);
-        const { payload, idMap } = buildNewsPayload(inst, selected, new Date(this.now()));
+        const { payload, idMap } = buildNewsPayload(inst, selected, new Date(this.now()), lang);
         return {
           inputHash: hashString(`${NEWS_PROMPT_VERSION}|${selected.map((n) => n.id).sort().join(',')}`),
           // Ohne Meldungen gibt es nichts einzuordnen: keine KI-Anfrage, kein Kontingentverbrauch
-          skipLlm: selected.length === 0 ? ({ byId: {}, overall: { summary: 'Keine aktuellen Meldungen vorhanden.', argumentsFor: [], argumentsAgainst: [] }, notes: [] } satisfies NewsAnalysis) : undefined,
+          skipLlm: selected.length === 0 ? ({ byId: {}, overall: { summary: '', argumentsFor: [], argumentsAgainst: [] }, notes: [] } satisfies NewsAnalysis) : undefined,
           run: async () => {
-            const r = await runNewsAnalysis({ llm, payload, idMap });
+            const r = await runNewsAnalysis({ llm, payload, idMap, lang });
             return { analysis: r.analysis, provider: r.provider, model: r.model, attempts: r.attempts, guardRemoved: r.guardRemoved };
           },
         };
@@ -173,7 +184,7 @@ export class AnalysisService {
     if (entry && !o.force && age < MIN_INTERVAL_MS) return this.envelope(entry, { cached: true });
     if (entry && o.force && age < FORCE_INTERVAL_MS) {
       const wait = Math.ceil((FORCE_INTERVAL_MS - age) / 60_000);
-      return this.envelope(entry, { cached: true, refreshBlocked: true, note: `Neue Auswertung frühestens in ${wait} Min. möglich.` });
+      return this.envelope(entry, { cached: true, refreshBlocked: true, note: msg('refreshTooSoon', { minutes: wait }) });
     }
 
     // 2. Daten holen. Bei unveränderten Eingaben bleibt die alte Auswertung gültig.
@@ -181,7 +192,7 @@ export class AnalysisService {
     try {
       prepared = await o.prepare(llm);
     } catch (err) {
-      if (entry) return this.envelope(entry, { cached: true, stale: true, note: `Daten konnten nicht aktualisiert werden: ${(err as Error).message}` });
+      if (entry) return this.envelope(entry, { cached: true, stale: true, note: msg('dataRefreshFailed', { detail: (err as Error).message }) });
       throw err;
     }
     if (entry && !o.force && entry.inputHash === prepared.inputHash) return this.envelope(entry, { cached: true });
@@ -196,9 +207,9 @@ export class AnalysisService {
     const budgetKey = `budget:${new Date(now).toISOString().slice(0, 10)}`;
     const used = (await this.deps.kv.get<{ count: number }>(budgetKey).catch(() => null))?.value.count ?? 0;
     if (used >= this.dailyLimit) {
-      const note = `Tageslimit für KI-Abfragen erreicht (${this.dailyLimit}).`;
+      const note = msg('dailyLimit', { limit: this.dailyLimit });
       if (entry) return this.envelope(entry, { cached: true, stale: true, note });
-      throw new AdapterError('RATE_LIMITED', note, 'analysis');
+      throw new AdapterError('RATE_LIMITED', formatMsg(note, DEFAULT_LANG), 'analysis');
     }
 
     try {
@@ -208,12 +219,12 @@ export class AnalysisService {
       await this.deps.kv.set(o.key, fresh).catch(() => undefined);
       return this.envelope(fresh, { cached: false });
     } catch (err) {
-      if (entry) return this.envelope(entry, { cached: true, stale: true, note: `Neue Auswertung fehlgeschlagen: ${(err as Error).message}` });
+      if (entry) return this.envelope(entry, { cached: true, stale: true, note: msg('analysisFailed', { detail: (err as Error).message }) });
       throw err;
     }
   }
 
-  private envelope<T>(s: Stored<T>, extra: { cached: boolean; stale?: boolean; refreshBlocked?: boolean; note?: string }): Envelope<T> {
+  private envelope<T>(s: Stored<T>, extra: { cached: boolean; stale?: boolean; refreshBlocked?: boolean; note?: Msg }): Envelope<T> {
     return {
       analysis: s.analysis,
       meta: {

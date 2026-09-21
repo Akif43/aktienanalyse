@@ -2,6 +2,7 @@ import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from '
 import { Link, Route, Routes } from 'react-router-dom';
 import { TabBar } from './components/ui';
 import { AUTHORIZED_EVENT, UNAUTHORIZED_EVENT } from './lib/api';
+import { translate, useT } from './lib/i18n';
 import { DetailScreen } from './screens/DetailScreen';
 import { SearchScreen } from './screens/SearchScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
@@ -21,10 +22,10 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error?: Error }
     return (
       <main className="screen">
         <div className="error-note" role="alert">
-          <strong>Unerwarteter Fehler in der App.</strong>
+          <strong>{translate('app.crash')}</strong>
           <div className="muted">{this.state.error.message}</div>
           <button type="button" className="btn btn-small" onClick={() => location.reload()}>
-            App neu laden
+            {translate('app.reload')}
           </button>
         </div>
       </main>
@@ -33,6 +34,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error?: Error }
 }
 
 function UnauthorizedBanner() {
+  const { t } = useT();
   const [show, setShow] = useState(false);
   useEffect(() => {
     const on = () => setShow(true);
@@ -47,8 +49,20 @@ function UnauthorizedBanner() {
   if (!show) return null;
   return (
     <div className="banner" role="alert">
-      Zugriffstoken fehlt oder ist falsch. <Link to="/einstellungen">Einstellungen öffnen</Link>
+      {t('banner.unauthorized')} <Link to="/einstellungen">{t('banner.openSettings')}</Link>
     </div>
+  );
+}
+
+function NotFound() {
+  const { t } = useT();
+  return (
+    <main className="screen">
+      <div className="center-note">{t('app.notFound')}</div>
+      <Link to="/" className="btn">
+        {t('common.toList')}
+      </Link>
+    </main>
   );
 }
 
@@ -61,17 +75,7 @@ export function App() {
         <Route path="/s/:ticker" element={<DetailScreen />} />
         <Route path="/suche" element={<SearchScreen />} />
         <Route path="/einstellungen" element={<SettingsScreen />} />
-        <Route
-          path="*"
-          element={
-            <main className="screen">
-              <div className="center-note">Seite nicht gefunden.</div>
-              <Link to="/" className="btn">
-                Zur Watchlist
-              </Link>
-            </main>
-          }
-        />
+        <Route path="*" element={<NotFound />} />
       </Routes>
       <TabBar />
     </ErrorBoundary>
