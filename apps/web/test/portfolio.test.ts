@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { positionAvgPrice, positionCostBasis, positionCurrency, positionGain, positionQuantity, positionValue, portfolioTotals, toTRY } from '../src/lib/portfolio';
+import { CashStore, sanitizeCash } from '../src/lib/cash-store';
+import { cashTotal, convertAmount, positionAvgPrice, positionCostBasis, positionCurrency, positionGain, positionQuantity, positionValue, portfolioTotals, toTRY } from '../src/lib/portfolio';
 import { PortfolioStore, sanitizePositions, type PortfolioPosition } from '../src/lib/portfolio-store';
 import type { StorageLike } from '../src/lib/storage';
 
@@ -140,27 +141,97 @@ describe('reine Berechnungen (portfolio.ts)', () => {
     expect(toTRY(100, 'EUR', { USD: null, EUR: 43 })).toBe(4300);
   });
 
-  it('portfolioTotals: rechnet alle Positionen nach Lira um und summiert', () => {
+  it('portfolioTotals: rechnet alle Positionen nach Lira um und summiert (Standard-Zielwährung TRY)', () => {
     const priceByKey = new Map<string, number | null>([['AAPL', 130], ['AFT', 2.0]]);
     const totals = portfolioTotals([stock, fund], priceByKey, { USD: 40, EUR: 43 });
     // Aktie: Wert 650 USD -> 26000 TRY, Kapital 560 USD -> 22400 TRY; Fonds: Wert 200 TRY, Kapital 150 TRY
-    expect(totals.valueTRY).toBeCloseTo(26000 + 200);
-    expect(totals.costTRY).toBeCloseTo(22400 + 150);
+    expect(totals.value).toBeCloseTo(26000 + 200);
+    expect(totals.cost).toBeCloseTo(22400 + 150);
     expect(totals.incomplete).toBe(false);
     expect(totals.missingCount).toBe(0);
+  });
+
+  it('portfolioTotals: rechnet auf Wunsch auch in eine andere Zielwährung um (z. B. Euro)', () => {
+    const priceByKey = new Map<string, number | null>([['AAPL', 130], ['AFT', 2.0]]);
+    const totals = portfolioTotals([stock, fund], priceByKey, { USD: 40, EUR: 43 }, 'EUR');
+    // Gesamt in TRY: 26200 Wert, 22550 Kapital -> durch 43 (EUR-Kurs) geteilt
+    expect(totals.value).toBeCloseTo(26200 / 43);
+    expect(totals.cost).toBeCloseTo(22550 / 43);
   });
 
   it('portfolioTotals: Position ohne Kurs oder fehlenden Wechselkurs macht die Summe "incomplete", statt einen falschen Wert zu zeigen', () => {
     const priceByKey = new Map<string, number | null>([['AFT', 2.0]]); // AAPL fehlt (noch nicht geladen)
     const totals = portfolioTotals([stock, fund], priceByKey, { USD: null, EUR: null });
-    expect(totals.valueTRY).toBeCloseTo(200);
-    expect(totals.costTRY).toBeCloseTo(150);
+    expect(totals.value).toBeCloseTo(200);
+    expect(totals.cost).toBeCloseTo(150);
     expect(totals.incomplete).toBe(true);
     expect(totals.missingCount).toBe(1);
   });
 
   it('portfolioTotals: leeres Depot ergibt Nullen ohne Prozentangabe', () => {
     const totals = portfolioTotals([], new Map(), { USD: null, EUR: null });
-    expect(totals).toEqual({ valueTRY: 0, costTRY: 0, gainTRY: 0, gainPercent: null, incomplete: false, missingCount: 0 });
+    expect(totals).toEqual({ value: 0, cost: 0, gain: 0, gainPercent: null, incomplete: false, missingCount: 0 });
+  });
+
+  it('convertAmount: rechnet zwischen zwei Fremdwährungen über TRY als Zwischenschritt um', () => {
+    expect(convertAmount(100, 'TRY', 'TRY', { USD: null, EUR: null })).toBe(100);
+    expect(convertAmount(100, 'USD', 'TRY', { USD: 40, EUR: null })).toBe(4000);
+    expect(convertAmount(4300, 'TRY', 'EUR', { USD: null, EUR: 43 })).toBe(100);
+    expect(convertAmount(100, 'USD', 'EUR', { USD: 40, EUR: 43 })).toBeCloseTo((100 * 40) / 43);
+    expect(convertAmount(100, 'USD', 'EUR', { USD: null, EUR: 43 })).toBeNull();
+  });
+
+  it('cashTotal: summiert Bargeld über mehrere Währungen in die Zielwährung', () => {
+    const cash = { TRY: 1000, USD: 10, EUR: 5 };
+    const total = cashTotal(cash, 'TRY', { USD: 40, EUR: 43 });
+    expect(total.amount).toBeCloseTo(1000 + 400 + 215);
+    expect(total.incomplete).toBe(false);
+  });
+
+  it('cashTotal: fehlender Kurs macht die Summe "incomplete", ignorierte Nullwerte bleiben ohne Wirkung', () => {
+    const cash = { TRY: 1000, USD: 10, EUR: 0 };
+    const total = cashTotal(cash, 'TRY', { USD: null, EUR: null });
+    expect(total.amount).toBeCloseTo(1000); // USD fehlt, EUR ist 0 und wird übersprungen
+    expect(total.incomplete).toBe(true);
+  });
+
+  it('cashTotal: leeres Bargeld ergibt Null ohne "incomplete"', () => {
+    expect(cashTotal({ TRY: 0, USD: 0, EUR: 0 }, 'TRY', { USD: null, EUR: null })).toEqual({ amount: 0, incomplete: false });
+  });
+});
+
+describe('CashStore', () => {
+  it('startet mit Nullen und speichert Änderungen dauerhaft', () => {
+    const storage = fakeStorage();
+    const s = new CashStore(storage);
+    expect(s.getSnapshot()).toEqual({ TRY: 0, USD: 0, EUR: 0 });
+    s.set('EUR', 250);
+    s.set('TRY', 1000);
+    expect(s.getSnapshot()).toEqual({ TRY: 1000, USD: 0, EUR: 250 });
+    expect(new CashStore(storage).getSnapshot()).toEqual({ TRY: 1000, USD: 0, EUR: 250 });
+  });
+
+  it('lehnt negative oder ungültige Beträge ab, statt sie zu speichern', () => {
+    const s = new CashStore(fakeStorage());
+    s.set('USD', -5);
+    s.set('EUR', NaN);
+    expect(s.getSnapshot()).toEqual({ TRY: 0, USD: 0, EUR: 0 });
+  });
+
+  it('benachrichtigt Abonnenten bei Änderung', () => {
+    const s = new CashStore(fakeStorage());
+    let calls = 0;
+    const off = s.subscribe(() => calls++);
+    s.set('USD', 100);
+    expect(calls).toBe(1);
+    off();
+    s.set('EUR', 50);
+    expect(calls).toBe(1);
+  });
+
+  it('sanitizeCash übersteht kaputte oder manipulierte Speicherinhalte', () => {
+    expect(sanitizeCash('kaputt')).toEqual({ TRY: 0, USD: 0, EUR: 0 });
+    expect(sanitizeCash(undefined)).toEqual({ TRY: 0, USD: 0, EUR: 0 });
+    expect(sanitizeCash({ TRY: '500', USD: -1, EUR: 'x', GBP: 999 })).toEqual({ TRY: 500, USD: 0, EUR: 0 });
   });
 });

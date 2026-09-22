@@ -1,19 +1,30 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Spinner } from '../components/ui';
+import { Segmented, Spinner } from '../components/ui';
+import { cashStore, useCash, type CashCurrency, type CashHoldings } from '../lib/cash-store';
+import type { ChartCurrency } from '../lib/currency';
 import { formatPercent, formatPrice, formatSignedPrice } from '../lib/format';
 import { usePortfolioPrices } from '../lib/hooks';
 import { useT } from '../lib/i18n';
-import { positionAvgPrice, positionCurrency, positionGain, positionQuantity, portfolioTotals } from '../lib/portfolio';
+import { cashTotal, convertAmount, positionAvgPrice, positionCurrency, positionGain, positionQuantity, positionValue, portfolioTotals, type FxRates } from '../lib/portfolio';
 import { portfolioStore, usePortfolio, type PortfolioPosition } from '../lib/portfolio-store';
+
+const CURRENCIES: readonly ChartCurrency[] = ['TRY', 'USD', 'EUR'];
 
 export function PortfolioScreen() {
   const { t } = useT();
   const positions = usePortfolio();
+  const cash = useCash();
   const { priceByKey, fx, isPending } = usePortfolioPrices(positions);
   const [editing, setEditing] = useState(false);
-  const totals = useMemo(() => portfolioTotals(positions, priceByKey, fx), [positions, priceByKey, fx]);
-  const usesFx = positions.some((p) => positionCurrency(p) !== 'TRY');
+  const [editingCash, setEditingCash] = useState(false);
+  const [displayCurrency, setDisplayCurrency] = useState<ChartCurrency>('TRY');
+  const totals = useMemo(() => portfolioTotals(positions, priceByKey, fx, displayCurrency), [positions, priceByKey, fx, displayCurrency]);
+  const cashSum = useMemo(() => cashTotal(cash, displayCurrency, fx), [cash, displayCurrency, fx]);
+  const hasCash = cash.TRY > 0 || cash.USD > 0 || cash.EUR > 0;
+  const usesFx = positions.some((p) => positionCurrency(p) !== 'TRY') || cash.USD > 0 || cash.EUR > 0;
+  const incomplete = totals.incomplete || cashSum.incomplete;
+  const totalWealth = totals.value + cashSum.amount;
 
   return (
     <main className="screen">
@@ -31,7 +42,7 @@ export function PortfolioScreen() {
         </div>
       </header>
 
-      {positions.length === 0 ? (
+      {positions.length === 0 && !hasCash ? (
         <section className="empty">
           <p className="empty-title">{t('depot.empty')}</p>
           <p className="muted">{t('depot.emptyText')}</p>
@@ -43,31 +54,56 @@ export function PortfolioScreen() {
         </section>
       ) : (
         <>
+          <div className="currency-switch">
+            <span className="muted">{t('chart.currency')}:</span>
+            <Segmented options={CURRENCIES.map((value) => ({ value, label: t(`cur.${value}` as const) }))} value={displayCurrency} label={t('chart.currency')} onChange={setDisplayCurrency} />
+          </div>
+
           <section className="verdict-card">
             <div className="row">
               <div className="row-label">{t('depot.value')}</div>
-              <div className="row-value">{isPending ? <Spinner /> : formatPrice(totals.valueTRY, 'TRY')}</div>
+              <div className="row-value">{isPending ? <Spinner /> : formatPrice(totals.value, displayCurrency)}</div>
             </div>
             <div className="row">
               <div className="row-label">{t('depot.cost')}</div>
-              <div className="row-value">{formatPrice(totals.costTRY, 'TRY')}</div>
+              <div className="row-value">{formatPrice(totals.cost, displayCurrency)}</div>
             </div>
             <div className="row">
               <div className="row-label">{t('depot.gain')}</div>
-              <div className={`row-value ${totals.gainTRY >= 0 ? 'tone-up' : 'tone-down'}`}>
-                {formatSignedPrice(totals.gainTRY, 'TRY')}
+              <div className={`row-value ${totals.gain >= 0 ? 'tone-up' : 'tone-down'}`}>
+                {formatSignedPrice(totals.gain, displayCurrency)}
                 {totals.gainPercent !== null && <div className="row-hint">{formatPercent(totals.gainPercent)}</div>}
               </div>
             </div>
+            {hasCash && (
+              <>
+                <div className="row">
+                  <div className="row-label">{t('depot.cashValue')}</div>
+                  <div className="row-value">{formatPrice(cashSum.amount, displayCurrency)}</div>
+                </div>
+                <div className="row">
+                  <div className="row-label">{t('depot.totalWealth')}</div>
+                  <div className="row-value">{formatPrice(totalWealth, displayCurrency)}</div>
+                </div>
+              </>
+            )}
           </section>
-          {totals.incomplete && <p className="row-hint pad">{t('depot.incompleteNote')}</p>}
+          {incomplete && <p className="row-hint pad">{t('depot.incompleteNote')}</p>}
           {usesFx && <p className="row-hint pad">{t('depot.convertedNote')}</p>}
 
-          <ul className="list" aria-label={t('depot.list')}>
-            {positions.map((p) => (
-              <PositionRow key={p.key} position={p} currentPrice={priceByKey.get(p.key)} editing={editing} />
-            ))}
-          </ul>
+          {positions.length > 0 && (
+            <ul className="list" aria-label={t('depot.list')}>
+              {positions.map((p) => (
+                <PositionRow key={p.key} position={p} currentPrice={priceByKey.get(p.key)} editing={editing} fx={fx} displayCurrency={displayCurrency} />
+              ))}
+            </ul>
+          )}
+
+          {editingCash ? (
+            <CashEditor cash={cash} onDone={() => setEditingCash(false)} />
+          ) : (
+            <CashSection cash={cash} onEdit={() => setEditingCash(true)} />
+          )}
 
           <p className="disclaimer small">{t('depot.disclaimer')}</p>
         </>
@@ -76,12 +112,27 @@ export function PortfolioScreen() {
   );
 }
 
-function PositionRow({ position, currentPrice, editing }: { position: PortfolioPosition; currentPrice: number | null | undefined; editing: boolean }) {
+function PositionRow({
+  position,
+  currentPrice,
+  editing,
+  fx,
+  displayCurrency,
+}: {
+  position: PortfolioPosition;
+  currentPrice: number | null | undefined;
+  editing: boolean;
+  fx: FxRates;
+  displayCurrency: ChartCurrency;
+}) {
   const { t } = useT();
   const currency = positionCurrency(position);
   const quantity = positionQuantity(position);
   const avgPrice = positionAvgPrice(position);
+  const value = positionValue(position, currentPrice);
   const gain = positionGain(position, currentPrice);
+  const valueDisplay = value === null ? null : convertAmount(value, currency, displayCurrency, fx);
+  const gainDisplay = gain === null ? null : convertAmount(gain.amount, currency, displayCurrency, fx);
   const to = position.kind === 'stock' ? `/s/${encodeURIComponent(position.key)}` : `/f/${encodeURIComponent(position.key)}`;
 
   return (
@@ -98,21 +149,87 @@ function PositionRow({ position, currentPrice, editing }: { position: PortfolioP
             {position.symbol} <span className="tag">{t('depot.quantity')}: {quantity}</span>
           </div>
           <div className="row-hint">{t('depot.avgPrice')}: {formatPrice(avgPrice, currency)}</div>
+          {currentPrice !== undefined && currentPrice !== null && <div className="row-hint">{t('depot.currentPrice')}: {formatPrice(currentPrice, currency)}</div>}
         </div>
         <div className="watch-right">
           {currentPrice === undefined ? (
             <div className="skeleton" aria-label={t('watch.loadingAria')} />
-          ) : currentPrice === null || gain === null ? (
+          ) : currentPrice === null || valueDisplay === null || gainDisplay === null || gain === null ? (
             <div className="watch-error">{t('watch.unavailable')}</div>
           ) : (
             <>
-              <div className="watch-price">{formatPrice(currentPrice, currency)}</div>
-              <span className={`pill pill-${gain.amount >= 0 ? 'up' : 'down'}`}>{formatSignedPrice(gain.amount, currency)}</span>
+              <div className="watch-price">{formatPrice(valueDisplay, displayCurrency)}</div>
+              <span className={`pill pill-${gainDisplay >= 0 ? 'up' : 'down'}`}>{formatSignedPrice(gainDisplay, displayCurrency)}</span>
               {gain.percent !== null && <div className="watch-fresh">{formatPercent(gain.percent)}</div>}
             </>
           )}
         </div>
       </Link>
     </li>
+  );
+}
+
+function CashSection({ cash, onEdit }: { cash: CashHoldings; onEdit: () => void }) {
+  const { t } = useT();
+  const entries = (['TRY', 'USD', 'EUR'] as const).filter((c) => cash[c] > 0);
+
+  return (
+    <section className="group">
+      <h3>{t('depot.cashTitle')}</h3>
+      {entries.length === 0 ? (
+        <div className="row-hint pad">{t('depot.cashEmpty')}</div>
+      ) : (
+        entries.map((c) => (
+          <div className="row" key={c}>
+            <div className="row-label">{t(`cur.${c}` as const)}</div>
+            <div className="row-value">{formatPrice(cash[c], c)}</div>
+          </div>
+        ))
+      )}
+      <div className="stack">
+        <button type="button" className="btn btn-secondary" onClick={onEdit}>
+          {t('depot.editCash')}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function CashEditor({ cash, onDone }: { cash: CashHoldings; onDone: () => void }) {
+  const { t } = useT();
+  const [values, setValues] = useState<Record<CashCurrency, string>>({
+    TRY: cash.TRY ? String(cash.TRY) : '',
+    USD: cash.USD ? String(cash.USD) : '',
+    EUR: cash.EUR ? String(cash.EUR) : '',
+  });
+
+  const save = () => {
+    for (const c of ['TRY', 'USD', 'EUR'] as const) {
+      const n = Number((values[c] || '0').replace(',', '.'));
+      cashStore.set(c, Number.isFinite(n) && n >= 0 ? n : 0);
+    }
+    onDone();
+  };
+
+  return (
+    <section className="group">
+      <h3>{t('depot.cashTitle')}</h3>
+      <div className="lot-form">
+        {(['TRY', 'USD', 'EUR'] as const).map((c) => (
+          <label className="lot-form-field" key={c}>
+            <span className="row-hint">{t(`cur.${c}` as const)}</span>
+            <input className="search-input" inputMode="decimal" type="text" value={values[c]} onChange={(e) => setValues((v) => ({ ...v, [c]: e.target.value }))} placeholder="0" />
+          </label>
+        ))}
+        <div className="stack">
+          <button type="button" className="btn" onClick={save}>
+            {t('common.save')}
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={onDone}>
+            {t('common.cancel')}
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }

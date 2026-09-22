@@ -1,4 +1,6 @@
 import { MARKET_CURRENCY } from '@aktien/core';
+import type { CashHoldings } from './cash-store';
+import type { ChartCurrency } from './currency';
 import type { PortfolioPosition } from './portfolio-store';
 
 /** Landeswährung einer Position: Fonds immer TRY, Aktien je nach Börsenplatz. */
@@ -55,13 +57,47 @@ export function toTRY(amount: number, currency: string, fx: FxRates): number | n
   return rate === null ? null : amount * rate;
 }
 
+/** Rechnet einen Betrag von einer Währung in eine andere um (über TRY als Zwischenschritt). `null`, wenn ein nötiger Kurs fehlt. */
+export function convertAmount(amount: number, from: string, to: ChartCurrency, fx: FxRates): number | null {
+  const inTRY = toTRY(amount, from, fx);
+  if (inTRY === null) return null;
+  if (to === 'TRY') return inTRY;
+  const rate = to === 'USD' ? fx.USD : fx.EUR;
+  return rate === null ? null : inTRY / rate;
+}
+
+const CASH_CURRENCIES: readonly (keyof CashHoldings)[] = ['TRY', 'USD', 'EUR'];
+
+export interface CashTotal {
+  amount: number;
+  /** true, wenn für mindestens eine gehaltene Währung der Wechselkurs fehlt (Summe ist dann unvollständig). */
+  incomplete: boolean;
+}
+
+/** Summiert das Bargeld über alle Währungen in die Zielwährung. */
+export function cashTotal(cash: CashHoldings, to: ChartCurrency, fx: FxRates): CashTotal {
+  let amount = 0;
+  let incomplete = false;
+  for (const c of CASH_CURRENCIES) {
+    const held = cash[c];
+    if (!held) continue;
+    const converted = convertAmount(held, c, to, fx);
+    if (converted === null) {
+      incomplete = true;
+      continue;
+    }
+    amount += converted;
+  }
+  return { amount, incomplete };
+}
+
 export interface PortfolioTotals {
-  /** Aktueller Gesamtwert in Lira. */
-  valueTRY: number;
-  /** Eingesetztes Kapital in Lira. */
-  costTRY: number;
-  gainTRY: number;
-  /** Prozent bezogen auf costTRY; `null` ohne eingesetztes Kapital. */
+  /** Aktueller Gesamtwert der Positionen, in der Zielwährung. */
+  value: number;
+  /** Eingesetztes Kapital, in der Zielwährung. */
+  cost: number;
+  gain: number;
+  /** Prozent bezogen auf cost; `null` ohne eingesetztes Kapital. */
   gainPercent: number | null;
   /** true, wenn für mindestens eine Position kein aktueller Kurs oder Wechselkurs vorlag (Summe ist dann unvollständig). */
   incomplete: boolean;
@@ -70,27 +106,28 @@ export interface PortfolioTotals {
 }
 
 /**
- * Summiert alle Positionen zu einem Gesamtbild in Lira. Positionen ohne aktuellen Kurs (noch nicht geladen oder
- * Datenquelle nicht erreichbar) oder ohne den nötigen Wechselkurs fließen weder in Wert noch Kapital ein, damit die
- * Prozentangabe stimmig bleibt; `incomplete` zeigt an, dass die Summe dadurch zu niedrig ausfällt.
+ * Summiert alle Positionen zu einem Gesamtbild in der gewünschten Zielwährung (Standard Lira). Positionen ohne
+ * aktuellen Kurs (noch nicht geladen oder Datenquelle nicht erreichbar) oder ohne den nötigen Wechselkurs fließen
+ * weder in Wert noch Kapital ein, damit die Prozentangabe stimmig bleibt; `incomplete` zeigt an, dass die Summe
+ * dadurch zu niedrig ausfällt.
  */
-export function portfolioTotals(positions: readonly PortfolioPosition[], priceByKey: ReadonlyMap<string, number | null>, fx: FxRates): PortfolioTotals {
-  let valueTRY = 0;
-  let costTRY = 0;
+export function portfolioTotals(positions: readonly PortfolioPosition[], priceByKey: ReadonlyMap<string, number | null>, fx: FxRates, to: ChartCurrency = 'TRY'): PortfolioTotals {
+  let value = 0;
+  let cost = 0;
   let missingCount = 0;
   for (const p of positions) {
     const currency = positionCurrency(p);
     const price = priceByKey.get(p.key);
-    const value = price === undefined ? null : positionValue(p, price);
-    const valueInTRY = value === null ? null : toTRY(value, currency, fx);
-    const costInTRY = toTRY(positionCostBasis(p), currency, fx);
-    if (valueInTRY === null || costInTRY === null) {
+    const posValue = price === undefined ? null : positionValue(p, price);
+    const valueIn = posValue === null ? null : convertAmount(posValue, currency, to, fx);
+    const costIn = convertAmount(positionCostBasis(p), currency, to, fx);
+    if (valueIn === null || costIn === null) {
       missingCount++;
       continue;
     }
-    valueTRY += valueInTRY;
-    costTRY += costInTRY;
+    value += valueIn;
+    cost += costIn;
   }
-  const gainTRY = valueTRY - costTRY;
-  return { valueTRY, costTRY, gainTRY, gainPercent: costTRY > 0 ? (gainTRY / costTRY) * 100 : null, incomplete: missingCount > 0, missingCount };
+  const gain = value - cost;
+  return { value, cost, gain, gainPercent: cost > 0 ? (gain / cost) * 100 : null, incomplete: missingCount > 0, missingCount };
 }
