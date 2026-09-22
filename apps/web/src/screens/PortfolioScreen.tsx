@@ -76,6 +76,10 @@ export function PortfolioScreen() {
               <div className="row-label">{t('depot.totalWealth')}</div>
               <div className="row-value">{isPending ? <Spinner /> : formatPrice(totalWealth, displayCurrency)}</div>
             </div>
+            <div className="row">
+              <div className="row-label">{t('depot.value')}</div>
+              <div className="row-value">{isPending ? <Spinner /> : formatPrice(totals.value, displayCurrency)}</div>
+            </div>
             {hasCash && (
               <div className="row">
                 <div className="row-label">{t('depot.cashValue')}</div>
