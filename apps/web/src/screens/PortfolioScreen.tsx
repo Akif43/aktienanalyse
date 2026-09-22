@@ -31,10 +31,11 @@ export function PortfolioScreen() {
   const totalWealth = totals.value + cashSum.amount;
 
   const { priceHistory, fx: fxHistory, isPending: historyPending } = usePortfolioHistory(positions);
-  const historyCandles = useMemo(
-    () => portfolioHistory(positions, priceHistory, fxHistory, displayCurrency, FUND_TZ),
-    [positions, priceHistory, fxHistory, displayCurrency],
-  );
+  const historyCandles = useMemo(() => {
+    const base = portfolioHistory(positions, priceHistory, fxHistory, displayCurrency, FUND_TZ);
+    // Bargeld hat kein Kaufdatum: wird mit dem aktuellen Betrag über den ganzen Zeitraum dazugerechnet, damit der Chart das Gesamtvermögen zeigt.
+    return cashSum.amount === 0 ? base : base.map((c) => ({ ...c, open: c.open + cashSum.amount, high: c.high + cashSum.amount, low: c.low + cashSum.amount, close: c.close + cashSum.amount }));
+  }, [positions, priceHistory, fxHistory, displayCurrency, cashSum.amount]);
   const historyData = useMemo(() => (historyCandles.length > 1 ? buildChartData(historyCandles, { tz: FUND_TZ, daily: true, withIndicators: false }) : null), [historyCandles]);
 
   return (
@@ -72,9 +73,15 @@ export function PortfolioScreen() {
 
           <section className="verdict-card">
             <div className="row">
-              <div className="row-label">{t('depot.value')}</div>
-              <div className="row-value">{isPending ? <Spinner /> : formatPrice(totals.value, displayCurrency)}</div>
+              <div className="row-label">{t('depot.totalWealth')}</div>
+              <div className="row-value">{isPending ? <Spinner /> : formatPrice(totalWealth, displayCurrency)}</div>
             </div>
+            {hasCash && (
+              <div className="row">
+                <div className="row-label">{t('depot.cashValue')}</div>
+                <div className="row-value">{formatPrice(cashSum.amount, displayCurrency)}</div>
+              </div>
+            )}
             <div className="row">
               <div className="row-label">{t('depot.cost')}</div>
               <div className="row-value">{formatPrice(totals.cost, displayCurrency)}</div>
@@ -86,18 +93,6 @@ export function PortfolioScreen() {
                 {totals.gainPercent !== null && <div className="row-hint">{formatPercent(totals.gainPercent)}</div>}
               </div>
             </div>
-            {hasCash && (
-              <>
-                <div className="row">
-                  <div className="row-label">{t('depot.cashValue')}</div>
-                  <div className="row-value">{formatPrice(cashSum.amount, displayCurrency)}</div>
-                </div>
-                <div className="row">
-                  <div className="row-label">{t('depot.totalWealth')}</div>
-                  <div className="row-value">{formatPrice(totalWealth, displayCurrency)}</div>
-                </div>
-              </>
-            )}
           </section>
           {incomplete && <p className="row-hint pad">{t('depot.incompleteNote')}</p>}
           {usesFx && <p className="row-hint pad">{t('depot.convertedNote')}</p>}
