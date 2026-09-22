@@ -140,7 +140,8 @@ tools/               Build-Skripte, Icons, lokaler Produktionsserver, pandas-Ref
 ```
 
 `npm run build` erzeugt die Vercel-Ausgabe (Build Output API v3) unter `.vercel/output`: die Web-App als statische Dateien und
-je API-Route eine eigenständig gebündelte Funktion. Derselbe Handler läuft im Dev-Server.
+eine einzige gebündelte Funktion für alle `/api/*`-Routen (der Hobby-Plan erlaubt höchstens 12 Functions je Deployment,
+`createApi()` dispatcht ohnehin selbst anhand des Pfads). Derselbe Handler läuft im Dev-Server.
 
 **API** (alle außer `health` mit `Authorization: Bearer <APP_TOKEN>`, sofern gesetzt): `/api/health`, `/api/quote?s=THYAO.IS,AAPL`,
 `/api/candles?s=…&tf=1T|1W|1M|6M|1J|5J`, `/api/history?s=…`, `/api/news?s=…&name=…`, `/api/search?q=…`,

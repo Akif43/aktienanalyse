@@ -1,6 +1,7 @@
 /**
- * Lokaler "Produktionsserver": liefert den Build (.vercel/output/static) und die gebündelten API-Funktionen
- * (.vercel/output/functions/api/*.func) genau so aus, wie Vercel es später tut. Zum Testen von Service Worker, Manifest und API vor dem Deployment.
+ * Lokaler "Produktionsserver": liefert den Build (.vercel/output/static) und die gebündelte API-Funktion
+ * (.vercel/output/functions/api.func) genau so aus, wie Vercel es später tut (eine Funktion für alle
+ * /api/*-Routen, siehe tools/vercel-output.mjs). Zum Testen von Service Worker, Manifest und API vor dem Deployment.
  *
  *   npm run build && npm start        # http://localhost:4173
  */
@@ -24,25 +25,19 @@ const MIME = {
   '.json': 'application/json',
 };
 
-const handlers = new Map();
-async function apiHandler(name) {
-  if (!/^[a-z-]+$/.test(name)) return null;
-  const file = resolve('.vercel/output/functions/api', `${name}.func`, 'index.mjs');
-  if (!existsSync(file)) return null;
-  if (!handlers.has(name)) handlers.set(name, (await import(pathToFileURL(file).href)).default);
-  return handlers.get(name);
+let apiHandler;
+async function loadApiHandler() {
+  const file = resolve('.vercel/output/functions/api.func', 'index.mjs');
+  if (!existsSync(file)) throw new Error(`API-Funktion fehlt: ${file}. Erst "npm run build" ausführen.`);
+  return (await import(pathToFileURL(file).href)).default;
 }
 
 createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
 
   if (url.pathname.startsWith('/api/')) {
-    const handler = await apiHandler(url.pathname.slice(5).replace(/\/+$/, ''));
-    if (!handler) {
-      res.writeHead(404, { 'content-type': 'application/json' }).end('{"error":{"code":"NOT_FOUND","message":"Unbekannte Route"}}');
-      return;
-    }
-    return handler(req, res);
+    apiHandler ??= await loadApiHandler();
+    return apiHandler(req, res);
   }
 
   // Statische Datei, sonst SPA-Fallback auf index.html. Pfad darf das dist-Verzeichnis nicht verlassen.

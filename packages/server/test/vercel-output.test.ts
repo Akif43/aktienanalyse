@@ -7,15 +7,18 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildVercelOutput, MAX_DURATION, RUNTIME } from '../../../tools/vercel-output.mjs';
 
 /**
- * Prüft das eigentliche Deployment-Artefakt: Struktur der Vercel-Ausgabe (Build Output API v3) und dass
- * jede gebündelte Funktion eigenständig lauffähig ist, also genau das, was Vercel später ausführt.
+ * Prüft das eigentliche Deployment-Artefakt: Struktur der Vercel-Ausgabe (Build Output API v3) und dass die
+ * gebündelte Funktion eigenständig lauffähig ist, also genau das, was Vercel später ausführt.
+ *
+ * Eine einzige Funktion für alle /api/*-Routen (statt einer je Route): Der Hobby-Plan erlaubt höchstens
+ * 12 Serverless Functions je Deployment, `createApi()` dispatcht ohnehin selbst anhand des Pfads.
  */
 const RUNNER = fileURLToPath(new URL('./run-function.mjs', import.meta.url));
+const ROUTES = ['analysis', 'candles', 'fund', 'fund-benchmark', 'fund-history', 'fund-search', 'health', 'history', 'news', 'news-analysis', 'news-item', 'quote', 'search'];
 
 describe('Vercel-Ausgabe (Build Output API v3)', () => {
   let dir: string;
   let result: { outDir: string; functions: string[] };
-  const ROUTES = ['analysis', 'candles', 'fund', 'fund-benchmark', 'fund-history', 'fund-search', 'health', 'history', 'news', 'news-analysis', 'news-item', 'quote', 'search'];
 
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), 'vercel-out-'));
@@ -28,8 +31,8 @@ describe('Vercel-Ausgabe (Build Output API v3)', () => {
 
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-  it('erzeugt je API-Route eine Funktion', () => {
-    expect(result.functions.sort()).toEqual(ROUTES);
+  it('erzeugt genau eine Funktion für alle API-Routen (Hobby-Limit: höchstens 12 je Deployment)', () => {
+    expect(result.functions).toEqual(['api']);
   });
 
   it('kopiert die statischen Dateien', () => {
@@ -37,33 +40,31 @@ describe('Vercel-Ausgabe (Build Output API v3)', () => {
     expect(readFileSync(join(result.outDir, 'static', 'sw.js'), 'utf-8')).toBe('// sw');
   });
 
-  it('schreibt gültige Funktionskonfiguration (Node-Runtime, ESM, Handler vorhanden)', () => {
-    for (const name of ROUTES) {
-      const fn = join(result.outDir, 'functions', 'api', `${name}.func`);
-      const cfg = JSON.parse(readFileSync(join(fn, '.vc-config.json'), 'utf-8'));
-      expect(cfg).toMatchObject({ runtime: RUNTIME, handler: 'index.mjs', launcherType: 'Nodejs', shouldAddHelpers: false });
-      expect(cfg.maxDuration).toBe(MAX_DURATION[name] ?? MAX_DURATION.default);
-      expect(JSON.parse(readFileSync(join(fn, 'package.json'), 'utf-8'))).toEqual({ type: 'module' });
-    }
+  it('schreibt gültige Funktionskonfiguration (Node-Runtime, ESM, Handler vorhanden, lange Höchstlaufzeit für die KI-Routen)', () => {
+    const fn = join(result.outDir, 'functions', 'api.func');
+    const cfg = JSON.parse(readFileSync(join(fn, '.vc-config.json'), 'utf-8'));
+    expect(cfg).toMatchObject({ runtime: RUNTIME, handler: 'index.mjs', launcherType: 'Nodejs', shouldAddHelpers: false, maxDuration: MAX_DURATION });
+    expect(JSON.parse(readFileSync(join(fn, 'package.json'), 'utf-8'))).toEqual({ type: 'module' });
     expect(RUNTIME).toMatch(/^nodejs\d+\.x$/);
+    expect(MAX_DURATION).toBeGreaterThanOrEqual(60);
   });
 
-  it('config.json: Dateien vor API vor SPA-Fallback, kein Fallback für /api', () => {
+  it('config.json: Dateien vor API vor SPA-Fallback, alle /api/*-Pfade gehen an die eine Funktion', () => {
     const cfg = JSON.parse(readFileSync(join(result.outDir, 'config.json'), 'utf-8'));
     expect(cfg.version).toBe(3);
     const order = cfg.routes.map((r: { handle?: string; src?: string }) => r.handle ?? r.src);
-    expect(order.indexOf('filesystem')).toBeLessThan(order.indexOf('/api/.*'));
-    expect(order.indexOf('/api/.*')).toBeLessThan(order.indexOf('/(.*)'));
-    expect(cfg.routes.find((r: { src?: string }) => r.src === '/api/.*')).toMatchObject({ status: 404 });
+    expect(order.indexOf('filesystem')).toBeLessThan(order.indexOf('/api/(.*)'));
+    expect(order.indexOf('/api/(.*)')).toBeLessThan(order.indexOf('/(.*)'));
+    expect(cfg.routes.find((r: { src?: string }) => r.src === '/api/(.*)')).toMatchObject({ dest: '/api' });
     // Service Worker und index.html dürfen nicht dauerhaft gecacht werden, sonst kommen Updates nie an
     const sw = cfg.routes.find((r: { src?: string }) => r.src === '/sw.js');
     expect(sw.headers['cache-control']).toContain('max-age=0');
     expect(sw.continue).toBe(true);
   });
 
-  it('jede gebündelte Funktion läuft eigenständig in einem frischen Node-Prozess', () => {
+  it('läuft eigenständig in einem frischen Node-Prozess und beantwortet jede Route sinnvoll, ohne zu crashen', () => {
+    const file = join(result.outDir, 'functions', 'api.func', 'index.mjs');
     for (const name of ROUTES) {
-      const file = join(result.outDir, 'functions', 'api', `${name}.func`, 'index.mjs');
       const out = JSON.parse(execFileSync(process.execPath, [RUNNER, file, name], { encoding: 'utf-8', timeout: 30_000 }));
       // Ohne Parameter und ohne API-Keys liefert jede Route eine definierte Antwort statt zu crashen:
       // health 200, KI-Routen 503 (nicht eingerichtet), alle anderen 400 (Parameter fehlt)
