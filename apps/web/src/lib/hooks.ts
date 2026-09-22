@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { marketState, type FundPeriod, type Timeframe } from '@aktien/core';
+import { marketState, type Candle, type FundPeriod, type Timeframe } from '@aktien/core';
 import { FX_SYMBOL } from './currency';
+import { fundCandles } from './fund-chart';
 import { useLang } from './i18n';
 import type { PortfolioPosition } from './portfolio-store';
 import { api, ApiError, type NewsEnvelope, type NewsItemEnvelope, type QuoteResult, type TechnicalEnvelope } from './api';
@@ -204,4 +205,34 @@ export function usePortfolioPrices(positions: readonly PortfolioPosition[]) {
   const fx = { USD: rate(FX_SYMBOL.USD), EUR: rate(FX_SYMBOL.EUR) };
   const isPending = quotes.isPending || fundResults.some((r) => r.isPending);
   return { priceByKey, fx, isPending };
+}
+
+/**
+ * Kursverlauf je Depot-Position (Aktien bis zu 2 Jahre, Fonds bis zu 5 Jahre TEFAS-Historie) sowie die
+ * Wechselkursverläufe USD/EUR→TRY, für den Depot-Wert-über-Zeit-Chart. Teilt sich den Zwischenspeicher mit
+ * den Aktien-/Fonds-Detailseiten (gleiche Query-Schlüssel wie `useHistory`/`useFundHistory`).
+ */
+export function usePortfolioHistory(positions: readonly PortfolioPosition[]) {
+  const stocks = positions.filter((p) => p.kind === 'stock');
+  const funds = positions.filter((p) => p.kind === 'fund');
+  const hasPositions = positions.length > 0;
+
+  const stockResults = useQueries({
+    queries: stocks.map((p) => ({ queryKey: ['chart', p.key, 'history'], queryFn: () => api.history(p.key), staleTime: 5 * 60_000 })),
+  });
+  const fundResults = useQueries({
+    queries: funds.map((p) => ({ queryKey: ['fund-history', p.key, '5year'], queryFn: () => api.fundHistory(p.key, '5year'), staleTime: 10 * 60_000 })),
+  });
+  const fxUsd = useHistory(FX_SYMBOL.USD, hasPositions);
+  const fxEur = useHistory(FX_SYMBOL.EUR, hasPositions);
+
+  const priceHistory = new Map<string, Candle[]>();
+  stocks.forEach((p, i) => priceHistory.set(p.key, stockResults[i]?.data?.candles ?? []));
+  funds.forEach((p, i) => {
+    const points = fundResults[i]?.data;
+    priceHistory.set(p.key, points ? fundCandles(points) : []);
+  });
+
+  const isPending = stockResults.some((r) => r.isPending) || fundResults.some((r) => r.isPending) || (hasPositions && (fxUsd.isPending || fxEur.isPending));
+  return { priceHistory, fx: { USD: fxUsd.data?.candles ?? [], EUR: fxEur.data?.candles ?? [] }, isPending };
 }

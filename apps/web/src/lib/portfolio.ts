@@ -59,6 +59,7 @@ export function toTRY(amount: number, currency: string, fx: FxRates): number | n
 
 /** Rechnet einen Betrag von einer Währung in eine andere um (über TRY als Zwischenschritt). `null`, wenn ein nötiger Kurs fehlt. */
 export function convertAmount(amount: number, from: string, to: ChartCurrency, fx: FxRates): number | null {
+  if (from === to) return amount;
   const inTRY = toTRY(amount, from, fx);
   if (inTRY === null) return null;
   if (to === 'TRY') return inTRY;

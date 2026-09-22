@@ -494,6 +494,8 @@ export const de = {
   'depot.editCash': 'Bargeld bearbeiten',
   'depot.cashValue': 'Bargeld',
   'depot.totalWealth': 'Gesamtvermögen',
+  'depot.historyTitle': 'Wert im Zeitverlauf',
+  'depot.historyCashNote': 'Bargeld ist im Verlauf nicht enthalten, da kein Datum dafür bekannt ist.',
   'lot.quantity': 'Stückzahl',
   'lot.price': 'Kaufpreis je Stück ({currency})',
   'lot.date': 'Kaufdatum',

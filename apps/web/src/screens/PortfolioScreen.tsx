@@ -1,12 +1,16 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Chart } from '../components/Chart';
 import { Segmented, Spinner } from '../components/ui';
 import { cashStore, useCash, type CashCurrency, type CashHoldings } from '../lib/cash-store';
+import { buildChartData } from '../lib/chart-data';
 import type { ChartCurrency } from '../lib/currency';
+import { FUND_TZ } from '../lib/fund-chart';
 import { formatPercent, formatPrice, formatSignedPrice } from '../lib/format';
-import { usePortfolioPrices } from '../lib/hooks';
+import { usePortfolioHistory, usePortfolioPrices } from '../lib/hooks';
 import { useT } from '../lib/i18n';
 import { cashTotal, convertAmount, positionAvgPrice, positionCurrency, positionGain, positionQuantity, positionValue, portfolioTotals, type FxRates } from '../lib/portfolio';
+import { portfolioHistory } from '../lib/portfolio-history';
 import { portfolioStore, usePortfolio, type PortfolioPosition } from '../lib/portfolio-store';
 
 const CURRENCIES: readonly ChartCurrency[] = ['TRY', 'USD', 'EUR'];
@@ -25,6 +29,13 @@ export function PortfolioScreen() {
   const usesFx = positions.some((p) => positionCurrency(p) !== 'TRY') || cash.USD > 0 || cash.EUR > 0;
   const incomplete = totals.incomplete || cashSum.incomplete;
   const totalWealth = totals.value + cashSum.amount;
+
+  const { priceHistory, fx: fxHistory, isPending: historyPending } = usePortfolioHistory(positions);
+  const historyCandles = useMemo(
+    () => portfolioHistory(positions, priceHistory, fxHistory, displayCurrency, FUND_TZ),
+    [positions, priceHistory, fxHistory, displayCurrency],
+  );
+  const historyData = useMemo(() => (historyCandles.length > 1 ? buildChartData(historyCandles, { tz: FUND_TZ, daily: true, withIndicators: false }) : null), [historyCandles]);
 
   return (
     <main className="screen">
@@ -90,6 +101,22 @@ export function PortfolioScreen() {
           </section>
           {incomplete && <p className="row-hint pad">{t('depot.incompleteNote')}</p>}
           {usesFx && <p className="row-hint pad">{t('depot.convertedNote')}</p>}
+
+          {positions.length > 0 && (
+            <section>
+              <h2 className="section-title">{t('depot.historyTitle')}</h2>
+              <div className="chart-wrap">
+                {historyPending && !historyData ? (
+                  <Spinner label={t('chart.loading')} />
+                ) : historyData ? (
+                  <Chart data={historyData} mode="line" intraday={false} overlays={{ sma20: false, sma50: false, sma200: false, bollinger: false }} showVolume={false} showRsi={false} showMacd={false} onLegend={() => {}} />
+                ) : (
+                  <div className="center-note">{t('chart.noData')}</div>
+                )}
+              </div>
+              {hasCash && <p className="row-hint pad">{t('depot.historyCashNote')}</p>}
+            </section>
+          )}
 
           {positions.length > 0 && (
             <ul className="list" aria-label={t('depot.list')}>

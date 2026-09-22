@@ -492,6 +492,8 @@ export const tr: Record<DictKey, string> = {
   'depot.editCash': 'Nakdi düzenle',
   'depot.cashValue': 'Nakit',
   'depot.totalWealth': 'Toplam varlık',
+  'depot.historyTitle': 'Zaman içindeki değer',
+  'depot.historyCashNote': 'Nakit bu grafikte yok, çünkü tarihi bilinmiyor.',
   'lot.quantity': 'Adet',
   'lot.price': 'Birim alış fiyatı ({currency})',
   'lot.date': 'Alım tarihi',

@@ -181,6 +181,11 @@ describe('reine Berechnungen (portfolio.ts)', () => {
     expect(convertAmount(100, 'USD', 'EUR', { USD: null, EUR: 43 })).toBeNull();
   });
 
+  it('convertAmount: gleiche Quell- und Zielwährung braucht keinen Kurs (auch nicht, wenn er fehlt)', () => {
+    expect(convertAmount(100, 'USD', 'USD', { USD: null, EUR: null })).toBe(100);
+    expect(convertAmount(100, 'EUR', 'EUR', { USD: null, EUR: null })).toBe(100);
+  });
+
   it('cashTotal: summiert Bargeld über mehrere Währungen in die Zielwährung', () => {
     const cash = { TRY: 1000, USD: 10, EUR: 5 };
     const total = cashTotal(cash, 'TRY', { USD: 40, EUR: 43 });
