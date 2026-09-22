@@ -109,6 +109,13 @@ describe('TefasAdapter: Kursverlauf', () => {
     expect(points.map((p) => p.date)).toEqual(['2026-08-05', '2026-08-10', '2026-08-15']);
   });
 
+  it('wirft nicht die ganze Antwort weg, wenn einzelne Tage keinen Preis haben (echt bei längeren Zeiträumen wie 3/5 Jahre)', async () => {
+    const withGap = { resultList: [{ tarih: '2026-08-05', fiyat: 1.0 }, { tarih: '2026-08-10', fiyat: null }, { tarih: '2026-08-15', fiyat: 1.02 }] };
+    const mock = mockFetch(json(withGap));
+    const points = await new TefasAdapter({ fetch: mock.fetch, sleep: mock.sleep }).getHistory('AFT', '3year');
+    expect(points.map((p) => p.date)).toEqual(['2026-08-05', '2026-08-15']);
+  });
+
   it('"Woche" fragt einen Monat ab (TEFAS kennt keine Woche) und schneidet auf die letzten 7 Tage zu', async () => {
     const month = { resultList: Array.from({ length: 22 }, (_, i) => ({ tarih: `2026-08-${String(i + 1).padStart(2, '0')}`, fiyat: 1 + i / 100 })) };
     const mock = mockFetch(json(month));
@@ -165,5 +172,18 @@ describe('TefasAdapter: Vergleich mit Gold, BIST, Inflation, Devisen', () => {
     const points = await new TefasAdapter({ fetch: mock.fetch, sleep: mock.sleep }).getBenchmark('yay', 'year');
     expect(points.map((p) => p.kind)).toEqual(['fund', 'gold', 'usd']);
     expect(points[0]!.returnPercent).toBeCloseTo(48);
+  });
+
+  it('lässt Vergleichswerte ohne Ergebnis über den ganzen Zeitraum weg, statt die ganze Antwort zu verwerfen', async () => {
+    const withGap = {
+      resultList: [
+        { fonKodu: 'AFT', fonUnvan: 'AFT', fonTuru: 'Hisse Senedi Şemsiye Fonu', fonTurGetiri: 0.48 },
+        { fonKodu: 'ALTIN', fonUnvan: 'ALTIN', fonTuru: 'ALTIN', fonTurGetiri: null },
+        { fonKodu: 'USD', fonUnvan: 'USD', fonTuru: 'USD', fonTurGetiri: 0.1 },
+      ],
+    };
+    const mock = mockFetch(json(withGap));
+    const points = await new TefasAdapter({ fetch: mock.fetch, sleep: mock.sleep }).getBenchmark('AFT', '5year');
+    expect(points.map((p) => p.kind)).toEqual(['fund', 'usd']);
   });
 });

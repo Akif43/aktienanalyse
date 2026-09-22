@@ -43,9 +43,12 @@ const infoSchema = z.object({
     .nullish(),
 });
 
-const priceSchema = z.object({ resultList: z.array(z.object({ tarih: z.string(), fiyat: z.number() })).nullish() });
+// fiyat/fonTurGetiri kommen bei längeren Zeiträumen (3/5 Jahre) gelegentlich als null zurück (Handelspausen,
+// Fonds ohne Historie über den ganzen Zeitraum): nullable statt number, damit ein einzelner Ausreißer nicht die
+// gesamte Antwort verwirft. Die betroffenen Einträge werden anschließend herausgefiltert.
+const priceSchema = z.object({ resultList: z.array(z.object({ tarih: z.string(), fiyat: z.number().nullable() })).nullish() });
 
-const profileSchema = z.object({ resultList: z.array(z.object({ fonKodu: z.string(), fonUnvan: z.string(), fonTuru: z.string(), fonTurGetiri: z.number() })).nullish() });
+const profileSchema = z.object({ resultList: z.array(z.object({ fonKodu: z.string(), fonUnvan: z.string(), fonTuru: z.string(), fonTurGetiri: z.number().nullable() })).nullish() });
 
 /**
  * Türkische Investment-/Rentenfonds über die inoffizielle JSON-API von TEFAS (Türkiye Elektronik Fon Alım Satım
@@ -107,7 +110,10 @@ export class TefasAdapter implements FundAdapter {
 
   async getHistory(code: FundCode, period: FundPeriod): Promise<FundPricePoint[]> {
     const r = await post('fonFiyatBilgiGetir', { fonKodu: code.toUpperCase(), dil: 'TR', periyod: PERIOD_MONTHS[period] }, priceSchema, this.opts);
-    const points = (r.resultList ?? []).map((p) => ({ date: p.tarih, price: p.fiyat })).sort((a, b) => a.date.localeCompare(b.date));
+    const points = (r.resultList ?? [])
+      .filter((p): p is { tarih: string; fiyat: number } => p.fiyat !== null)
+      .map((p) => ({ date: p.tarih, price: p.fiyat }))
+      .sort((a, b) => a.date.localeCompare(b.date));
     if (period !== 'week') return points;
     const cutoff = points.at(-1) ? addDays(points.at(-1)!.date, -WEEK_DAYS) : null;
     return cutoff ? points.filter((p) => p.date >= cutoff) : points;
@@ -118,6 +124,8 @@ export class TefasAdapter implements FundAdapter {
     let fund: FundBenchmarkPoint | null = null;
     const rest: FundBenchmarkPoint[] = [];
     for (const row of r.resultList ?? []) {
+      // Kein Wert über den ganzen Zeitraum (z. B. Vergleichsinstrument existiert noch nicht so lange): auslassen statt 0 vorzutäuschen
+      if (row.fonTurGetiri === null) continue;
       if (row.fonKodu === code.toUpperCase()) {
         fund = { kind: 'fund', label: cleanName(row.fonUnvan), returnPercent: round(row.fonTurGetiri * 100)! };
         continue;

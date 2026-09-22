@@ -85,7 +85,7 @@ Voraussetzung: Node.js ≥ 20 (getestet mit 24).
 ```bash
 npm install
 npm run dev          # http://localhost:5173 (App + API in einem Server)
-npm test             # 275 Tests
+npm test             # 407 Tests
 npm run typecheck
 npm run smoke        # Live-Abruf der Datenquellen für ein paar Ticker
 npm run spike        # prüft, ob alle Datenquellen aus der aktuellen Umgebung erreichbar sind
@@ -178,7 +178,7 @@ Für BIST gibt es gratis **keine offizielle Echtzeitquelle**. Die App ist aussch
 
 ## Tests
 
-`npm test` (405 Tests) prüft unter anderem:
+`npm test` (407 Tests) prüft unter anderem:
 
 - **Indikatoren gegen unabhängige pandas-Referenzwerte** (Toleranz 1e-7), plus von Hand nachgerechnete Fälle.
 - **Adapter** gegen aufgezeichnete Live-Antworten inklusive Fehlerfälle. **KI-Anbieter** (Gemini, Groq, Ollama) gegen nachgebildete Antworten inklusive Kontingent-, Schema- und Key-Fehlern.
