@@ -14,7 +14,8 @@ News/KAP mit Einordnung, Kursanzeige und (später) Push-Alarme als PWA auf dem i
 | 3 | PWA: Watchlist, Kurs, Chart, Suche, installierbar | erledigt (Vercel-Deployment steht noch aus) |
 | 4 | KI-Auswertung (technisch + News/KAP), TRY/USD/EUR | erledigt, mit echtem Gemini-Key auf Vercel geprüft |
 | 4b | Einfache Ansicht für Laien, Deutsch und Türkisch umschaltbar | erledigt (türkische Texte bitte gegenlesen) |
-| **4c** | **Türkische Investment-/Rentenfonds (TEFAS): Suche, Merkliste, Kursverlauf, Vergleich** | **erledigt** |
+| 4c | Türkische Investment-/Rentenfonds (TEFAS): Suche, Merkliste, Kursverlauf, Vergleich | erledigt |
+| **4d** | **Depot: eigene Käufe (Aktien und Fonds) eintragen, Vermögen und Gewinn/Verlust sehen** | **erledigt** |
 | 5 | Hintergrund-Überwachung und Push (ntfy, Web Push) | offen |
 | 6 | Feinschliff, Fehlerbehandlung, Deployment-Anleitung | offen |
 
@@ -28,6 +29,7 @@ News/KAP mit Einordnung, Kursanzeige und (später) Push-Alarme als PWA auf dem i
 - **Wichtiges zuerst:** Die KI bewertet jede Meldung nach Firmenbezug **und** möglicher Kurswirkung (Skala 1 bis 5, bloße Namensnennung zählt nicht). Die Liste ist danach sortiert, Unwichtiges (bei Presse Wichtigkeit 1 und 2, bei KAP 1) ist eingeklappt. Vorab entscheidet eine einfache Vorbewertung (Firma im Titel, Ereigniswörter wie Bilanz/Dividende/Übernahme, Füllstoff wie Tagesnotizen und Kurslisten, bei KAP Meldungsart und Absender), welche Meldungen die KI überhaupt zu sehen bekommt. Berichte zur selben Geschichte (z. B. 30 Artikel über denselben Preis) erscheinen einmal mit "+N weitere Berichte". Grenze: Ähnliche Artikel mit ganz anderen Worten werden nicht immer erkannt.
 - **Meldung antippen = Erklärung in der App:** Die KI fasst die Meldung in einfachen Worten zusammen und ordnet ein, was sie für die Aktie bedeuten könnte (kurzfristig, langfristig, was helfen und was belasten könnte, worauf man achten kann), mit Ampel-Einstufung und Angabe, wie gut das belegt ist. **Bei KAP-Meldungen liest die KI den vollständigen Meldungstext** (das offizielle KAP-PDF). **Bei Presseartikeln liegt ihr nur die Überschrift vor**, weil Artikeltexte nicht frei abrufbar sind; die App sagt das ausdrücklich und deckelt die Sicherheit der Einschätzung. Das Original bleibt als Link erreichbar. Abgerufen wird erst beim Antippen, gespeichert je Meldung und Sprache (kostet also pro Meldung höchstens eine KI-Anfrage).
 - **Fonds (TEFAS):** eigener Reiter in der Suche, eigene Merkliste "Meine Fonds" (getrennt von den Aktien), Fonds-Detailseite mit Preis, Tagesänderung, Kategorie, Platz in der Kategorie, Anlegerzahl, Marktanteil, einfachem Kursverlauf (Woche bis 5 Jahre, **umschaltbar TRY/USD/EUR** wie beim Aktienchart, umgerechnet mit dem Tageskurs) und Vergleich mit Gold, BIST 100/30, Inflation (TÜFE), USD, EUR und Bankzins. Quelle ist TEFAS (Tefas.gov.tr), die offizielle Handelsplattform für Investment- und Rentenfonds in der Türkei; der Preis wird einmal täglich nach Börsenschluss aktualisiert, nicht in Echtzeit. Keine KI-Auswertung für Fonds (nur Zahlen aus TEFAS, keine Einschätzung).
+- **Depot:** eigene Käufe von Aktien und Fonds eintragen (Stückzahl, Kaufpreis, Datum, mehrere Käufe je Wert möglich), Übersicht zeigt aktuellen Gesamtwert, eingesetztes Kapital und Gewinn/Verlust (in Lira umgerechnet, Fremdwährungen zum Tageskurs), je Position außerdem direkt auf der Aktien-/Fonds-Detailseite unter "Mein Bestand". Rein lokal auf dem Gerät gespeichert (wie die Watchlist), keine Anlageberatung.
 - **Suche** (BIST, XETRA, US, TEFAS-Fonds), **Einstellungen** (Sprache, Zugangscode, Verbindungstest, KI-Status, Liste sichern), **PWA** (installierbar, offlinefähige Hülle). Alarme folgen in Phase 5.
 
 ## So verhindert die App erfundene Zahlen
@@ -85,7 +87,7 @@ Voraussetzung: Node.js ≥ 20 (getestet mit 24).
 ```bash
 npm install
 npm run dev          # http://localhost:5173 (App + API in einem Server)
-npm test             # 407 Tests
+npm test             # 423 Tests
 npm run typecheck
 npm run smoke        # Live-Abruf der Datenquellen für ein paar Ticker
 npm run spike        # prüft, ob alle Datenquellen aus der aktuellen Umgebung erreichbar sind
@@ -178,11 +180,12 @@ Für BIST gibt es gratis **keine offizielle Echtzeitquelle**. Die App ist aussch
 
 ## Tests
 
-`npm test` (407 Tests) prüft unter anderem:
+`npm test` (423 Tests) prüft unter anderem:
 
 - **Indikatoren gegen unabhängige pandas-Referenzwerte** (Toleranz 1e-7), plus von Hand nachgerechnete Fälle.
 - **Adapter** gegen aufgezeichnete Live-Antworten inklusive Fehlerfälle. **KI-Anbieter** (Gemini, Groq, Ollama) gegen nachgebildete Antworten inklusive Kontingent-, Schema- und Key-Fehlern.
 - **Fonds (TEFAS):** Suche (Kürzel exakt vor Präfix vor Namenstreffer, Zwischenspeicher), Fondsinfo, Zeitraum-Zuordnung (inkl. "Woche" als zugeschnittener Monat), Vergleichswerte mit erzwungener Reihenfolge (Fonds selbst zuerst), Fehlerfälle, gegen echte aufgezeichnete TEFAS-Antworten.
+- **Depot:** Speicher (Käufe hinzufügen/entfernen, kaputte Speicherinhalte, Export/Import), Berechnungen (Ø-Kaufpreis, Gewinn/Verlust, Währungsumrechnung nach Lira, unvollständige Summen bei fehlendem Kurs).
 - **Sprachen:** deutsches und türkisches Wörterbuch haben dieselben Schlüssel und Platzhalter, Systemmeldungen gibt es in beiden Sprachen, Formate ("1,50 %" bzw. "%1,50"), Spracherkennung, KI-Sprache in Prompt und Zwischenspeicher, Fachbegriffe tauchen in der Einfach-Ansicht nicht auf.
 - **Zahlen-Wächter:** deutsche, türkische und englische Zahlenformate, Rundung, Datum/Uhrzeit, erfundene Kurse, eingeschleuste Anweisungen.
 - **Auswertungen:** Kandidaten und Handelsplan mit echten THYAO-Daten, Währungsumrechnung, Prüfablauf mit Wiederholung, Zwischenspeicher, Mindestabstand, Tageslimit, Ausfälle.

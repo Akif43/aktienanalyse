@@ -1,6 +1,8 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { marketState, type FundPeriod, type Timeframe } from '@aktien/core';
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { marketState, MARKET_CURRENCY, type FundPeriod, type Timeframe } from '@aktien/core';
+import { FX_SYMBOL } from './currency';
 import { useLang } from './i18n';
+import type { PortfolioPosition } from './portfolio-store';
 import { api, ApiError, type NewsEnvelope, type NewsItemEnvelope, type QuoteResult, type TechnicalEnvelope } from './api';
 import { appStorage, QUOTES_CACHE_KEY } from './storage';
 
@@ -175,4 +177,33 @@ export function useFundHistory(code: string, period: FundPeriod) {
 
 export function useFundBenchmark(code: string, period: FundPeriod) {
   return useQuery({ queryKey: ['fund-benchmark', code, period], queryFn: () => api.fundBenchmark(code, period), staleTime: 10 * 60_000, placeholderData: keepPreviousData });
+}
+
+// --- Depot -----------------------------------------------------------------------------------
+
+/**
+ * Aktuelle Kurse für alle Depot-Positionen (Aktien über einen gemeinsamen Kursabruf, Fonds einzeln) sowie die
+ * Wechselkurse, die für die Umrechnung nach Lira gebraucht werden. Teilt sich den Zwischenspeicher mit der
+ * Watchlist bzw. den Fonds-Detailseiten (gleiche Query-Schlüssel).
+ */
+export function usePortfolioPrices(positions: readonly PortfolioPosition[]) {
+  const stocks = positions.filter((p) => p.kind === 'stock');
+  const funds = positions.filter((p) => p.kind === 'fund');
+  const currencies = new Set(stocks.map((p) => (p.market ? MARKET_CURRENCY[p.market] : 'TRY')));
+  const fxTickers = [...(currencies.has('USD') ? [FX_SYMBOL.USD] : []), ...(currencies.has('EUR') ? [FX_SYMBOL.EUR] : [])];
+  const quotes = useQuotes([...stocks.map((p) => p.key), ...fxTickers]);
+  const fundResults = useQueries({
+    queries: funds.map((p) => ({ queryKey: ['fund', p.key], queryFn: () => api.fund(p.key), staleTime: 10 * 60_000 })),
+  });
+
+  const priceByKey = new Map<string, number | null>();
+  for (const r of quotes.data ?? []) priceByKey.set(r.ticker, r.quote?.price ?? null);
+  funds.forEach((p, i) => priceByKey.set(p.key, fundResults[i]?.data?.price ?? null));
+
+  const rate = (ticker: string) => quotes.data?.find((r) => r.ticker === ticker)?.quote?.price ?? null;
+  const fx = { USD: currencies.has('USD') ? rate(FX_SYMBOL.USD) : null, EUR: currencies.has('EUR') ? rate(FX_SYMBOL.EUR) : null };
+  // enabled:false lässt useQuery dauerhaft "pending": nur mitzählen, wenn überhaupt Aktien/Wechselkurse abgefragt werden
+  const stocksPending = (stocks.length > 0 || fxTickers.length > 0) && quotes.isPending;
+  const isPending = stocksPending || fundResults.some((r) => r.isPending);
+  return { priceByKey, fx, isPending };
 }

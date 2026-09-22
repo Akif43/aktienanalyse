@@ -35,6 +35,13 @@ export function formatPrice(value: number | null | undefined, currency?: string,
   return n === '–' || !currency ? n : `${n} ${SYMBOL[currency] ?? currency}`;
 }
 
+/** Vorzeichenbehafteter Geldbetrag, z. B. für Gewinn/Verlust ("+1.234,56 ₺", "−12,00 $"). */
+export function formatSignedPrice(value: number | null | undefined, currency?: string, lang?: Lang): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '–';
+  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
+  return `${sign}${formatPrice(Math.abs(value), currency, lang)}`;
+}
+
 /** Prozentwert: deutsch "1,23 %", türkisch "%1,23" (das Zeichen steht im Türkischen davor). */
 export function formatPercent(value: number | null | undefined, signed = true, lang: Lang = getLang()): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '–';

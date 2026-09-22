@@ -1,11 +1,11 @@
 import { convertCandles, type Market, type Timeframe } from '@aktien/core';
 import { useMemo } from 'react';
 import { buildChartData, visibleFrom } from './chart-data';
+import { FX_SYMBOL, type ChartCurrency } from './currency';
 import { useChartSeries, useHistory, usesDailyHistory } from './hooks';
 import { marketTimezone } from './format';
 
-export type ChartCurrency = 'TRY' | 'USD' | 'EUR';
-export const FX_SYMBOL = { USD: 'USDTRY=X', EUR: 'EURTRY=X' } as const;
+export { FX_SYMBOL, type ChartCurrency } from './currency';
 export const TIMEFRAMES: readonly Timeframe[] = ['1T', '1W', '1M', '6M', '1J', '5J'];
 
 /**

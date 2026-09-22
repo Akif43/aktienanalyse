@@ -34,3 +34,4 @@ export const QUOTES_CACHE_KEY = 'aktien.quotes.v1';
 export const LANG_KEY = 'aktien.lang';
 export const DETAILS_KEY = 'aktien.details.open';
 export const FUNDS_KEY = 'aktien.funds.v1';
+export const PORTFOLIO_KEY = 'aktien.portfolio.v1';

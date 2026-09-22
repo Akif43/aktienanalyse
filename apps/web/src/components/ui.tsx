@@ -114,6 +114,7 @@ const icons = {
   list: 'M4 6h16M4 12h16M4 18h16',
   search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm9 16-4-4',
   gear: 'M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm0-5v2m0 13v2m8.5-8.5h-2m-13 0h-2m14.6-6.1-1.4 1.4M7.3 16.7l-1.4 1.4m0-12.2 1.4 1.4m9.4 9.4 1.4 1.4',
+  depot: 'M23 6 13.5 15.5 8.5 10.5 1 18M17 6h6v6',
 };
 
 export function TabBar() {
@@ -130,6 +131,7 @@ export function TabBar() {
     <nav className="tabbar" aria-label={t('nav.aria')}>
       {tab('/', t('nav.watchlist'), 'list', true)}
       {tab('/suche', t('nav.search'), 'search')}
+      {tab('/depot', t('nav.depot'), 'depot')}
       {tab('/einstellungen', t('nav.settings'), 'gear')}
     </nav>
   );

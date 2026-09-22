@@ -2,6 +2,7 @@ import { convertCandles, type FundPeriod } from '@aktien/core';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Chart } from '../components/Chart';
+import { HoldingsSection } from '../components/HoldingsSection';
 import { ChangePill, ErrorNote, Segmented, Spinner } from '../components/ui';
 import { ApiError } from '../lib/api';
 import { FX_SYMBOL, periodStats, type ChartCurrency } from '../lib/chart-model';
@@ -171,6 +172,8 @@ export function FundDetailScreen() {
           ))
         )}
       </section>
+
+      <HoldingsSection instrument={{ kind: 'fund', key: code, symbol: code, name }} currentPrice={info.data?.price ?? null} />
 
       <p className="disclaimer">{t('fund.disclaimer')}</p>
     </main>

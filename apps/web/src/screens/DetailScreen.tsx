@@ -5,6 +5,7 @@ import { AdvancedAnalysis, AiUnavailable, VerdictCard } from '../components/Anal
 import { Collapsible } from '../components/Collapsible';
 import { Glance } from '../components/Glance';
 import { Glossary } from '../components/Glossary';
+import { HoldingsSection } from '../components/HoldingsSection';
 import { NewsDetail } from '../components/NewsDetail';
 import { NewsList, NewsSummary } from '../components/NewsList';
 import { CandleSection, FxEffect, SimpleChart } from '../components/PriceCharts';
@@ -117,7 +118,7 @@ export function DetailScreen() {
 
       {!itemOpen && <Segmented options={tabs} value={tab} label={t('detail.tabsAria')} onChange={(v) => setParams({ tab: v }, { replace: true })} />}
 
-      {tab === 'overview' && <OverviewTab ticker={ticker} market={instrument.market} currency={quote?.currency} name={name} />}
+      {tab === 'overview' && <OverviewTab ticker={ticker} symbol={instrument.symbol} market={instrument.market} currency={quote?.currency} price={quote?.price} name={name} />}
       {tab === 'news' && (
         <NewsTab
           key={lang}
@@ -140,7 +141,7 @@ export function DetailScreen() {
   );
 }
 
-function OverviewTab({ ticker, market, currency, name }: { ticker: string; market: Market; currency?: string; name?: string }) {
+function OverviewTab({ ticker, symbol, market, currency, price, name }: { ticker: string; symbol: string; market: Market; currency?: string; price?: number; name?: string }) {
   const { t } = useT();
   const analysis = useAnalysis(ticker, name);
   const history = useHistory(ticker);
@@ -183,6 +184,8 @@ function OverviewTab({ ticker, market, currency, name }: { ticker: string; marke
       {history.isPending && <Spinner label={t('glance.loading')} />}
 
       {isBist && <FxEffect fx={fxPerformance} />}
+
+      <HoldingsSection instrument={{ kind: 'stock', key: ticker, symbol, market, name }} currentPrice={price ?? null} />
 
       <Disclaimer />
 

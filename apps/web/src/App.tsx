@@ -3,8 +3,10 @@ import { Link, Route, Routes } from 'react-router-dom';
 import { TabBar } from './components/ui';
 import { AUTHORIZED_EVENT, UNAUTHORIZED_EVENT } from './lib/api';
 import { translate, useT } from './lib/i18n';
+import { AddHoldingScreen } from './screens/AddHoldingScreen';
 import { DetailScreen } from './screens/DetailScreen';
 import { FundDetailScreen } from './screens/FundDetailScreen';
+import { PortfolioScreen } from './screens/PortfolioScreen';
 import { SearchScreen } from './screens/SearchScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { WatchlistScreen } from './screens/WatchlistScreen';
@@ -76,6 +78,8 @@ export function App() {
         <Route path="/s/:ticker" element={<DetailScreen />} />
         <Route path="/f/:code" element={<FundDetailScreen />} />
         <Route path="/suche" element={<SearchScreen />} />
+        <Route path="/depot" element={<PortfolioScreen />} />
+        <Route path="/depot/neu" element={<AddHoldingScreen />} />
         <Route path="/einstellungen" element={<SettingsScreen />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
