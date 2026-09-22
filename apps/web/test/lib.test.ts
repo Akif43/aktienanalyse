@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Candle } from '@aktien/core';
 import { buildChartData, localParts, toChartTime, visibleFrom } from '../src/lib/chart-data';
-import { formatAsOf, formatNumber, formatPercent, formatPrice, formatRelative, formatSigned, formatVolume, direction, newsSearchName, safeHref } from '../src/lib/format';
+import { formatAsOf, formatCount, formatNumber, formatPercent, formatPrice, formatRelative, formatSigned, formatVolume, direction, newsSearchName, safeHref } from '../src/lib/format';
 import type { StorageLike } from '../src/lib/storage';
 import { sanitize, WatchlistStore } from '../src/lib/watchlist';
 
@@ -135,6 +135,13 @@ describe('Formatierung (de-DE)', () => {
   it('Volumen kompakt', () => {
     expect(formatVolume(9_282_188)).toMatch(/9,3\s?Mio/);
     expect(formatVolume(null)).toBe('–');
+  });
+
+  it('Ganzzahl ohne Nachkommastellen (z. B. Anlegerzahl), anders als formatNumber', () => {
+    expect(formatCount(42_599)).toBe('42.599');
+    expect(formatCount(0)).toBe('0');
+    expect(formatCount(null)).toBe('–');
+    expect(formatCount(NaN)).toBe('–');
   });
 
   it('Kurszeit in Börsenzeit: heute nur Uhrzeit, sonst Datum', () => {

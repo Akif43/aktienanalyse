@@ -23,6 +23,12 @@ export function formatNumber(value: number | null | undefined, maxDigits?: numbe
   return nf(2, Math.max(2, digits), {}, lang).format(value);
 }
 
+/** Ganze Zahl ohne Nachkommastellen (z. B. Anlegerzahl). Anders als formatNumber, das immer mindestens 2 Nachkommastellen zeigt. */
+export function formatCount(value: number | null | undefined, lang?: Lang): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '–';
+  return nf(0, 0, {}, lang).format(value);
+}
+
 const SYMBOL: Record<string, string> = { TRY: '₺', USD: '$', EUR: '€' };
 export function formatPrice(value: number | null | undefined, currency?: string, lang?: Lang): string {
   const n = formatNumber(value, undefined, lang);

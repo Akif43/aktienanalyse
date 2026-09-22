@@ -1,0 +1,19 @@
+{
+ "errorCode": null,
+ "errorMessage": null,
+ "resultList": [
+  {
+   "fonKodu": "AFT",
+   "fonUnvan": "AK PORTFÖY YENİ TEKNOLOJİLER YABANCI HİSSE SENEDİ FONU",
+   "sonFiyat": 1.034699,
+   "gunlukGetiri": 2.9305,
+   "payAdet": 18764814684,
+   "portBuyukluk": 19415933685.27,
+   "fonKategori": "Hisse Senedi Fonu",
+   "kategoriDerece": 30,
+   "kategoriFonSay": 200,
+   "yatirimciSayi": 134837,
+   "pazarPayi": 9.55
+  }
+ ]
+}

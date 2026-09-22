@@ -27,9 +27,9 @@ describe('Wörterbücher', () => {
   });
 
   it('türkische Texte sind wirklich übersetzt (nicht einfach die deutsche Vorlage)', () => {
-    // Nur Markenname, "Demo" und Währungsbezeichnungen (₺ Lira, € Euro) sind in beiden Sprachen gleich
+    // Nur Markenname, "Demo", Währungsbezeichnungen (₺ Lira, € Euro) und Börsenindex-Namen (BIST 100/30) sind in beiden Sprachen gleich
     const same = (Object.keys(de) as (keyof typeof de)[]).filter((k) => tr[k] === de[k] && /[a-zäöüß]{4,}/i.test(de[k]));
-    expect(same).toEqual(['app.name', 'ai.demo', 'cur.TRY', 'cur.EUR']);
+    expect(same).toEqual(['app.name', 'ai.demo', 'cur.TRY', 'cur.EUR', 'fund.kind.bist100', 'fund.kind.bist30', 'fund.kind.eur']);
   });
 
   it('die Einfach-Ansicht nennt keine Fachbegriffe in Klartexten', () => {

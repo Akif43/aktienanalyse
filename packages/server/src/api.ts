@@ -13,7 +13,10 @@ import {
   ResilientKv,
   searchInstruments,
   SupabaseKv,
+  TefasAdapter,
   type AdapterErrorCode,
+  type FundAdapter,
+  type FundPeriod,
   type Instrument,
   type KeyValueStore,
   type LlmEnv,
@@ -51,6 +54,7 @@ export interface ApiDeps {
   market: MarketDataAdapter;
   news: NewsService;
   search: (query: string) => Promise<SearchResult[]>;
+  fund: FundAdapter;
   cache?: TtlCache;
   analysis?: AnalysisService;
   aiInfo?: AiInfo;
@@ -66,7 +70,13 @@ const TTL = {
   history: 15 * 60_000,
   news: 5 * 60_000,
   search: 60 * 60_000,
+  fundSearch: 60 * 60_000,
+  /** TEFAS aktualisiert den Nettoinventarwert einmal täglich (nach Handelsschluss): kurzer Cache reicht. */
+  fund: 15 * 60_000,
+  fundHistory: 15 * 60_000,
 };
+
+const FUND_PERIODS: readonly FundPeriod[] = ['week', 'month', '3month', '6month', 'ytd', 'year', '3year', '5year'];
 
 const STATUS: Record<AdapterErrorCode, number> = {
   NOT_FOUND: 404,
@@ -116,6 +126,7 @@ export function createDeps(env: ApiEnv): ApiDeps {
     market,
     news,
     search: (q) => searchInstruments(q),
+    fund: new TefasAdapter(),
     cache,
     analysis: new AnalysisService({ llm, kv, market: new CachingMarket(market, cache), news, kapText: (item) => fetchKapDocumentText(item), dailyLimit: Number.isFinite(limit) && limit > 0 ? limit : undefined }),
     aiInfo: { configured: llm !== null, providers, storage: persistent ? 'supabase' : 'memory' },
@@ -157,6 +168,14 @@ export function createApi(env: ApiEnv, deps: ApiDeps = createDeps(env)): (req: R
           return json(await analysis(url, deps, cache, 'news'));
         case 'news-item':
           return json(await newsItem(url, deps, cache));
+        case 'fund-search':
+          return json(await fundSearch(url, deps, cache));
+        case 'fund':
+          return json(await fund(url, deps, cache));
+        case 'fund-history':
+          return json(await fundHistory(url, deps, cache));
+        case 'fund-benchmark':
+          return json(await fundBenchmark(url, deps, cache));
         default:
           throw new HttpError(404, 'NOT_FOUND', `Unbekannte Route: ${route || '/'}`);
       }
@@ -255,6 +274,44 @@ async function newsItem(url: URL, deps: ApiDeps, cache: TtlCache) {
   const lang = isLang(langParam) ? langParam : DEFAULT_LANG;
   const inst: Instrument = { ...instrumentFrom(ticker), name };
   return cache.get<unknown>(`ai:item:${ticker}:${name ?? ''}:${id}:${force}:${lang}`, 0, () => service.newsItem(inst, id, { force, name, lang }));
+}
+
+// --- Fonds (TEFAS) -------------------------------------------------------------------------
+
+async function fundSearch(url: URL, deps: ApiDeps, cache: TtlCache) {
+  const q = (url.searchParams.get('q') ?? '').trim();
+  if (q.length < 1 || q.length > 60) throw new HttpError(400, 'BAD_REQUEST', 'q muss 1 bis 60 Zeichen lang sein');
+  const results = await cache.get(`fs:${q.toLocaleLowerCase('tr')}`, TTL.fundSearch, () => deps.fund.search(q));
+  return { results };
+}
+
+async function fund(url: URL, deps: ApiDeps, cache: TtlCache) {
+  const code = requireFundCode(url);
+  return cache.get(`f:${code}`, TTL.fund, () => deps.fund.getFund(code));
+}
+
+async function fundHistory(url: URL, deps: ApiDeps, cache: TtlCache) {
+  const code = requireFundCode(url);
+  const period = fundPeriodFrom(url);
+  return cache.get(`fh:${code}:${period}`, TTL.fundHistory, () => deps.fund.getHistory(code, period));
+}
+
+async function fundBenchmark(url: URL, deps: ApiDeps, cache: TtlCache) {
+  const code = requireFundCode(url);
+  const period = fundPeriodFrom(url);
+  return cache.get(`fb:${code}:${period}`, TTL.fundHistory, () => deps.fund.getBenchmark(code, period));
+}
+
+function requireFundCode(url: URL): string {
+  const code = (url.searchParams.get('code') ?? '').trim().toUpperCase();
+  if (!/^[A-Z0-9]{1,10}$/.test(code)) throw new HttpError(400, 'BAD_REQUEST', 'Parameter code fehlt oder ist ungültig');
+  return code;
+}
+
+function fundPeriodFrom(url: URL): FundPeriod {
+  const p = url.searchParams.get('period');
+  if (!p || !(FUND_PERIODS as readonly string[]).includes(p)) throw new HttpError(400, 'BAD_REQUEST', `period muss einer von ${FUND_PERIODS.join(', ')} sein`);
+  return p as FundPeriod;
 }
 
 // --- Hilfsfunktionen ---------------------------------------------------------------------------

@@ -15,7 +15,7 @@ const RUNNER = fileURLToPath(new URL('./run-function.mjs', import.meta.url));
 describe('Vercel-Ausgabe (Build Output API v3)', () => {
   let dir: string;
   let result: { outDir: string; functions: string[] };
-  const ROUTES = ['analysis', 'candles', 'health', 'history', 'news', 'news-analysis', 'news-item', 'quote', 'search'];
+  const ROUTES = ['analysis', 'candles', 'fund', 'fund-benchmark', 'fund-history', 'fund-search', 'health', 'history', 'news', 'news-analysis', 'news-item', 'quote', 'search'];
 
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), 'vercel-out-'));

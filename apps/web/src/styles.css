@@ -138,6 +138,12 @@ button {
   font-size: 28px;
   line-height: 1;
 }
+.icon-btn-small {
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  font-size: 20px;
+}
 
 /* --- Listen ------------------------------------------------------------------------ */
 
@@ -463,6 +469,14 @@ button {
   font-size: 22px;
   font-weight: 700;
   margin: 24px 0 8px;
+}
+.funds-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.funds-header .section-title {
+  margin-bottom: 0;
 }
 
 /* --- Technik-Panel ------------------------------------------------------------------- */

@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { marketState, type Timeframe } from '@aktien/core';
+import { marketState, type FundPeriod, type Timeframe } from '@aktien/core';
 import { useLang } from './i18n';
 import { api, ApiError, type NewsEnvelope, type NewsItemEnvelope, type QuoteResult, type TechnicalEnvelope } from './api';
 import { appStorage, QUOTES_CACHE_KEY } from './storage';
@@ -150,3 +150,29 @@ export function useSearch(term: string) {
 }
 
 export const shouldRetry = (count: number, err: unknown): boolean => !(err instanceof ApiError && err.permanent) && count < 2;
+
+// --- Fonds (TEFAS) -------------------------------------------------------------------------
+
+export function useFundSearch(term: string) {
+  const q = term.trim();
+  return useQuery({
+    queryKey: ['fund-search', q.toLocaleLowerCase('tr')],
+    enabled: q.length >= 1,
+    queryFn: async () => (await api.fundSearch(q)).results,
+    staleTime: 60 * 60_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Aktueller Fondspreis samt Kennzahlen. TEFAS wertet einmal täglich aus: kein schnelles Polling nötig. */
+export function useFund(code: string) {
+  return useQuery({ queryKey: ['fund', code], queryFn: () => api.fund(code), staleTime: 10 * 60_000, refetchInterval: SLOW_POLL_MS });
+}
+
+export function useFundHistory(code: string, period: FundPeriod) {
+  return useQuery({ queryKey: ['fund-history', code, period], queryFn: () => api.fundHistory(code, period), staleTime: 10 * 60_000, placeholderData: keepPreviousData });
+}
+
+export function useFundBenchmark(code: string, period: FundPeriod) {
+  return useQuery({ queryKey: ['fund-benchmark', code, period], queryFn: () => api.fundBenchmark(code, period), staleTime: 10 * 60_000, placeholderData: keepPreviousData });
+}

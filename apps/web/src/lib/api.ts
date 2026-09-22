@@ -1,4 +1,4 @@
-import type { CandleSeries, Envelope, Lang, NewsItemDetail, NewsAnalysis, NewsItem, Quote, SearchResult, TechnicalAnalysis, Timeframe } from '@aktien/core';
+import type { CandleSeries, Envelope, Fund, FundBenchmarkPoint, FundPeriod, FundPricePoint, FundSearchResult, Lang, NewsItemDetail, NewsAnalysis, NewsItem, Quote, SearchResult, TechnicalAnalysis, Timeframe } from '@aktien/core';
 import { appStorage, TOKEN_KEY } from './storage';
 
 export class ApiError extends Error {
@@ -88,4 +88,8 @@ export const api = {
   history: (ticker: string) => apiGet<CandleSeries>('history', { s: ticker }),
   news: (ticker: string, name?: string) => apiGet<NewsResponse>('news', { s: ticker, name }),
   search: (q: string) => apiGet<{ results: SearchResult[] }>('search', { q }),
+  fundSearch: (q: string) => apiGet<{ results: FundSearchResult[] }>('fund-search', { q }),
+  fund: (code: string) => apiGet<Fund>('fund', { code }),
+  fundHistory: (code: string, period: FundPeriod) => apiGet<FundPricePoint[]>('fund-history', { code, period }),
+  fundBenchmark: (code: string, period: FundPeriod) => apiGet<FundBenchmarkPoint[]>('fund-benchmark', { code, period }),
 };

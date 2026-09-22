@@ -1,0 +1,94 @@
+{
+ "errorCode": null,
+ "errorMessage": null,
+ "resultList": [
+  {
+   "fonKodu": "AVJ",
+   "fonUnvan": "AGESA EMEKLİLİK VE HAYAT A.Ş. BAŞLANGIÇ KATILIM EMEKLİLİK YATIRIM FONU"
+  },
+  {
+   "fonKodu": "ONK",
+   "fonUnvan": "AK PORTFÖY ONİKİNCİ SERBEST (DÖVİZ-AVRO) FON"
+  },
+  {
+   "fonKodu": "AFT",
+   "fonUnvan": "AK PORTFÖY YENİ TEKNOLOJİLER YABANCI HİSSE SENEDİ FONU"
+  },
+  {
+   "fonKodu": "GIH",
+   "fonUnvan": "ALLBATROSS PORTFÖY GIDA VE İÇECEK SEKTÖRÜ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)"
+  },
+  {
+   "fonKodu": "YCL",
+   "fonUnvan": "ATA PORTFÖY BEŞİNCİ SERBEST FON"
+  },
+  {
+   "fonKodu": "FNE",
+   "fonUnvan": "AZİMUT PORTFÖY FİNE AGRO SERBEST (TL) ÖZEL FON"
+  },
+  {
+   "fonKodu": "BPJ",
+   "fonUnvan": "BNP PARİBAS CARDİF EMEKLİLİK A.Ş. OKS DENGELİ DEĞİŞKEN EMEKLİLİK YATIRIM FONU"
+  },
+  {
+   "fonKodu": "DRD",
+   "fonUnvan": "DENİZ PORTFÖY KAR PAYI ÖDEYEN ONBİRİNCİ SERBEST (DÖVİZ-AVRO) FON"
+  },
+  {
+   "fonKodu": "EMY",
+   "fonUnvan": "GARANTİ EMEKLİLİK VE HAYAT A.Ş. ALTIN EMEKLİLİK YATIRIM FONU"
+  },
+  {
+   "fonKodu": "GKH",
+   "fonUnvan": "GARANTİ PORTFÖY PARA PİYASASI KATILIM SERBEST (TL) FON"
+  },
+  {
+   "fonKodu": "HDC",
+   "fonUnvan": "HEDEF PORTFÖY DENGELİ ÇOKLU VARLIK KATILIM FONU"
+  },
+  {
+   "fonKodu": "IH1",
+   "fonUnvan": "İNCİR PORTFÖY BİRİNCİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)"
+  },
+  {
+   "fonKodu": "TI3",
+   "fonUnvan": "İŞ PORTFÖY İŞ BANKASI İŞTİRAKLERİ ENDEKSİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)"
+  },
+  {
+   "fonKodu": "KAV",
+   "fonUnvan": "KUVEYT TÜRK PORTFÖY ALTINCI KATILIM SERBEST (DÖVİZ-AVRO) FON"
+  },
+  {
+   "fonKodu": "NRG",
+   "fonUnvan": "NEO PORTFÖY BİRİNCİ PARA PİYASASI FONU"
+  },
+  {
+   "fonKodu": "OFB",
+   "fonUnvan": "OYAK PORTFÖY İSTATİSTİKSEL ARBİTRAJ SERBEST (TL) FON"
+  },
+  {
+   "fonKodu": "OJK",
+   "fonUnvan": "QNB PORTFÖY ALTIN FONU"
+  },
+  {
+   "fonKodu": "RD1",
+   "fonUnvan": "ROTA PORTFÖY BİRİNCİ DEĞİŞKEN FON"
+  },
+  {
+   "fonKodu": "TNB",
+   "fonUnvan": "TEB PORTFÖY ING BANK KAR PAYI ÖDEYEN SERBEST (DÖVİZ) ÖZEL FON"
+  },
+  {
+   "fonKodu": "SUB",
+   "fonUnvan": "ÜNLÜ PORTFÖY İKİNCİ DEĞİŞKEN FON"
+  },
+  {
+   "fonKodu": "YTC",
+   "fonUnvan": "YAPI KREDİ PORTFÖY TEMMUZ 2026 SERBEST (DÖVİZ-POUND) FON"
+  },
+  {
+   "fonKodu": "YAY",
+   "fonUnvan": "YAPI KREDİ PORTFÖY YABANCI TEKNOLOJİ SEKTÖRÜ HİSSE SENEDİ FONU"
+  }
+ ]
+}

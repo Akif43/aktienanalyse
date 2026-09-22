@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AdapterError, type MarketDataAdapter, type NewsService, type Quote } from '@aktien/core';
+import { AdapterError, type FundAdapter, type MarketDataAdapter, type NewsService, type Quote } from '@aktien/core';
 import { createApi, safeEqual, toNodeHandler, TtlCache, type ApiDeps } from '../src';
 
 const quote = (symbol: string, price = 100): Quote => ({
@@ -22,7 +22,7 @@ const quote = (symbol: string, price = 100): Quote => ({
   source: 'fake',
 });
 
-function fakeDeps(overrides: Partial<{ market: Partial<MarketDataAdapter>; news: Partial<NewsService>; search: ApiDeps['search'] }> = {}) {
+function fakeDeps(overrides: Partial<{ market: Partial<MarketDataAdapter>; news: Partial<NewsService>; search: ApiDeps['search']; fund: Partial<FundAdapter> }> = {}) {
   const market = {
     id: 'fake',
     supports: () => true,
@@ -36,7 +36,14 @@ function fakeDeps(overrides: Partial<{ market: Partial<MarketDataAdapter>; news:
     ...overrides.news,
   } as unknown as NewsService & { getNews: ReturnType<typeof vi.fn> };
   const search = overrides.search ?? vi.fn(async () => []);
-  return { deps: { market, news, search } as ApiDeps, market, news, search: search as ReturnType<typeof vi.fn> };
+  const fund = {
+    search: vi.fn(async () => []),
+    getFund: vi.fn(),
+    getHistory: vi.fn(async () => []),
+    getBenchmark: vi.fn(async () => []),
+    ...overrides.fund,
+  } as unknown as FundAdapter & { search: ReturnType<typeof vi.fn>; getFund: ReturnType<typeof vi.fn>; getHistory: ReturnType<typeof vi.fn>; getBenchmark: ReturnType<typeof vi.fn> };
+  return { deps: { market, news, search, fund } as unknown as ApiDeps, market, news, search: search as ReturnType<typeof vi.fn>, fund };
 }
 
 const get = (api: (r: Request) => Promise<Response>, path: string, headers: Record<string, string> = {}) =>
@@ -294,5 +301,73 @@ describe('toNodeHandler (echter HTTP-Server)', () => {
     expect(res.status).toBe(500);
     expect((await res.json()).error.code).toBe('INTERNAL');
     spy.mockRestore();
+  });
+});
+
+describe('Fonds (TEFAS)', () => {
+  it('/api/fund-search: reicht die Sucheingabe weiter und cacht sie', async () => {
+    const { deps, fund } = fakeDeps({ fund: { search: vi.fn(async () => [{ code: 'AFT', name: 'AK PORTFÖY ...' }]) } });
+    const api = createApi({}, deps);
+    const body = await (await get(api, '/api/fund-search?q=aft')).json();
+    expect(body.results).toEqual([{ code: 'AFT', name: 'AK PORTFÖY ...' }]);
+    await get(api, '/api/fund-search?q=aft');
+    expect(fund.search).toHaveBeenCalledTimes(1); // zweiter Aufruf kommt aus dem Cache
+    expect(fund.search).toHaveBeenCalledWith('aft');
+  });
+
+  it('/api/fund-search: prüft die Länge der Eingabe', async () => {
+    const { deps, fund } = fakeDeps();
+    const api = createApi({}, deps);
+    expect((await get(api, '/api/fund-search?q=')).status).toBe(400);
+    expect((await get(api, '/api/fund-search?q=' + 'x'.repeat(61))).status).toBe(400);
+    expect(fund.search).not.toHaveBeenCalled();
+  });
+
+  it('/api/fund: liefert die Fondsinfo, Kürzel wird großgeschrieben', async () => {
+    const { deps, fund } = fakeDeps({ fund: { getFund: vi.fn(async () => ({ code: 'AFT', name: 'x', category: 'Hisse Senedi Fonu', price: 1.03, dailyChangePercent: 2.9, categoryRank: 30, categoryFundCount: 200, investorCount: 1, marketSharePercent: 9.5, asOf: '2026-09-22' })) } });
+    const api = createApi({}, deps);
+    const body = await (await get(api, '/api/fund?code=aft')).json();
+    expect(body).toMatchObject({ code: 'AFT', price: 1.03 });
+    expect(fund.getFund).toHaveBeenCalledWith('AFT');
+  });
+
+  it('/api/fund: lehnt ein fehlendes oder ungültiges Kürzel ab', async () => {
+    const { deps, fund } = fakeDeps();
+    const api = createApi({}, deps);
+    expect((await get(api, '/api/fund')).status).toBe(400);
+    expect((await get(api, '/api/fund?code=' + encodeURIComponent('AFT!'))).status).toBe(400);
+    expect((await get(api, '/api/fund?code=' + 'A'.repeat(11))).status).toBe(400);
+    expect(fund.getFund).not.toHaveBeenCalled();
+  });
+
+  it('/api/fund-history und /api/fund-benchmark: verlangen einen gültigen Zeitraum', async () => {
+    const { deps, fund } = fakeDeps({ fund: { getHistory: vi.fn(async () => [{ date: '2026-09-01', price: 1 }]) } });
+    const api = createApi({}, deps);
+    expect((await get(api, '/api/fund-history?code=AFT')).status).toBe(400);
+    expect((await get(api, '/api/fund-history?code=AFT&period=jahrzehnt')).status).toBe(400);
+    const body = await (await get(api, '/api/fund-history?code=AFT&period=month')).json();
+    expect(body).toEqual([{ date: '2026-09-01', price: 1 }]);
+    expect(fund.getHistory).toHaveBeenCalledWith('AFT', 'month');
+    expect((await get(api, '/api/fund-benchmark?code=AFT')).status).toBe(400);
+  });
+
+  it('bildet Fehler des Fondsadapters ab wie bei Aktien (z. B. NOT_FOUND)', async () => {
+    const { deps } = fakeDeps({
+      fund: {
+        getFund: vi.fn(async () => {
+          throw new AdapterError('NOT_FOUND', 'Fonds "ZZZ" nicht gefunden', 'tefas');
+        }),
+      },
+    });
+    const res = await get(createApi({}, deps), '/api/fund?code=ZZZ');
+    expect(res.status).toBe(404);
+    expect((await res.json()).error.code).toBe('NOT_FOUND');
+  });
+
+  it('verlangt das Zugriffstoken wie die übrigen Datenrouten', async () => {
+    const { deps } = fakeDeps();
+    const api = createApi({ APP_TOKEN: 't' }, deps);
+    expect((await get(api, '/api/fund-search?q=aft')).status).toBe(401);
+    expect((await get(api, '/api/fund-search?q=aft', { authorization: 'Bearer t' })).status).toBe(200);
   });
 });

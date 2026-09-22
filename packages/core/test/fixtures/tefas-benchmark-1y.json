@@ -1,0 +1,60 @@
+{
+ "errorCode": null,
+ "errorMessage": null,
+ "resultList": [
+  {
+   "fonKodu": "AFT",
+   "fonUnvan": "AK PORTFÖY YENİ TEKNOLOJİLER YABANCI HİSSE SENEDİ FONU",
+   "fonTuru": "Hisse Senedi Şemsiye Fonu",
+   "fonTurGetiri": 0.357091
+  },
+  {
+   "fonKodu": "ALTIN",
+   "fonUnvan": "ALTIN",
+   "fonTuru": "ALTIN",
+   "fonTurGetiri": 0.349237
+  },
+  {
+   "fonKodu": "BIST100",
+   "fonUnvan": "BIST100",
+   "fonTuru": "BIST100",
+   "fonTurGetiri": 0.163028
+  },
+  {
+   "fonKodu": "BIST30",
+   "fonUnvan": "BIST30",
+   "fonTuru": "BIST30",
+   "fonTurGetiri": 0.290263
+  },
+  {
+   "fonKodu": "EUR",
+   "fonUnvan": "EUR",
+   "fonTuru": "EUR",
+   "fonTurGetiri": 0.153342
+  },
+  {
+   "fonKodu": "HISSE SENEDI ŞEMSIYE FONU",
+   "fonUnvan": "HISSE SENEDI ŞEMSIYE FONU",
+   "fonTuru": "Hisse Senedi Şemsiye Fonu",
+   "fonTurGetiri": 0.2293
+  },
+  {
+   "fonKodu": "MEVDUAT FAIZI",
+   "fonUnvan": "MEVDUAT FAIZI",
+   "fonTuru": "MF",
+   "fonTurGetiri": 0.4054
+  },
+  {
+   "fonKodu": "TUFE",
+   "fonUnvan": "TUFE",
+   "fonTuru": "TUFE",
+   "fonTurGetiri": 0.315019
+  },
+  {
+   "fonKodu": "USD",
+   "fonUnvan": "USD",
+   "fonTuru": "USD",
+   "fonTurGetiri": 0.18137
+  }
+ ]
+}

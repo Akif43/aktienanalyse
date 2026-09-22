@@ -23,6 +23,9 @@ export * from './adapters/news/kap';
 export * from './adapters/news/finnhub-news';
 export * from './adapters/news/service';
 
+export * from './adapters/fund/types';
+export * from './adapters/fund/tefas';
+
 export * from './watchlist/watchlist';
 
 export * from './ai/types';

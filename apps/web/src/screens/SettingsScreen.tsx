@@ -147,6 +147,7 @@ export function SettingsScreen() {
             <li>{t('settings.about2')}</li>
             <li>{t('settings.about3')}</li>
             <li>{t('settings.about4')}</li>
+            <li>{t('settings.about5')}</li>
           </ul>
         </div>
       </section>

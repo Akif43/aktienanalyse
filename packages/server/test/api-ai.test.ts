@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { AdapterError, AnalysisService, DemoProvider, MemoryKv, NewsService, type AnalysisService as AnalysisServiceType, type Candle, type MarketDataAdapter, type NewsAdapter, type NewsItem } from '@aktien/core';
 import { CachingMarket, createApi, createDeps, TtlCache, type ApiDeps } from '../src';
+import type { FundAdapter } from '@aktien/core';
 
 const ref = JSON.parse(readFileSync(fileURLToPath(new URL('../../core/test/fixtures/thyao-1d.reference.json', import.meta.url)), 'utf-8')) as { candles: Candle[] };
 
@@ -12,6 +13,7 @@ const baseDeps = (): ApiDeps => ({
   market: {} as MarketDataAdapter,
   news: {} as NewsService,
   search: async () => [],
+  fund: {} as FundAdapter,
 });
 
 const stubService = (over: Partial<Record<'technical' | 'news' | 'configured', unknown>> = {}) =>

@@ -13,7 +13,8 @@ News/KAP mit Einordnung, Kursanzeige und (später) Push-Alarme als PWA auf dem i
 | 2 | Datenanbindung, Indikatoren mit Tests, Watchlist-Speicher | erledigt |
 | 3 | PWA: Watchlist, Kurs, Chart, Suche, installierbar | erledigt (Vercel-Deployment steht noch aus) |
 | 4 | KI-Auswertung (technisch + News/KAP), TRY/USD/EUR | erledigt, mit echtem Gemini-Key auf Vercel geprüft |
-| **4b** | **Einfache Ansicht für Laien, Deutsch und Türkisch umschaltbar** | **erledigt (türkische Texte bitte gegenlesen)** |
+| 4b | Einfache Ansicht für Laien, Deutsch und Türkisch umschaltbar | erledigt (türkische Texte bitte gegenlesen) |
+| **4c** | **Türkische Investment-/Rentenfonds (TEFAS): Suche, Merkliste, Kursverlauf, Vergleich** | **erledigt** |
 | 5 | Hintergrund-Überwachung und Push (ntfy, Web Push) | offen |
 | 6 | Feinschliff, Fehlerbehandlung, Deployment-Anleitung | offen |
 
@@ -26,7 +27,8 @@ News/KAP mit Einordnung, Kursanzeige und (später) Push-Alarme als PWA auf dem i
 - **Nachrichten:** je Meldung Positiv/Neutral/Negativ und ein Hinweis "Wichtig", Titel in der gewählten Sprache (von der KI übersetzt, Original darunter), dazu "Kurz gesagt" mit Positivem und Negativem. **Offizielle KAP-Meldungen haben Vorrang:** Sie stehen in einem eigenen Abschnitt vor den Medien, die KI gewichtet sie höher (Presse gilt als zweitrangig und Unbestätigtes wird als solches genannt), und sie fließen bei BIST-Aktien auch in das **Kurzfazit** ein (die neuesten Meldungen der letzten 14 Tage; eine neue Meldung löst nach dem Mindestabstand eine neue Einschätzung aus).
 - **Wichtiges zuerst:** Die KI bewertet jede Meldung nach Firmenbezug **und** möglicher Kurswirkung (Skala 1 bis 5, bloße Namensnennung zählt nicht). Die Liste ist danach sortiert, Unwichtiges (bei Presse Wichtigkeit 1 und 2, bei KAP 1) ist eingeklappt. Vorab entscheidet eine einfache Vorbewertung (Firma im Titel, Ereigniswörter wie Bilanz/Dividende/Übernahme, Füllstoff wie Tagesnotizen und Kurslisten, bei KAP Meldungsart und Absender), welche Meldungen die KI überhaupt zu sehen bekommt. Berichte zur selben Geschichte (z. B. 30 Artikel über denselben Preis) erscheinen einmal mit "+N weitere Berichte". Grenze: Ähnliche Artikel mit ganz anderen Worten werden nicht immer erkannt.
 - **Meldung antippen = Erklärung in der App:** Die KI fasst die Meldung in einfachen Worten zusammen und ordnet ein, was sie für die Aktie bedeuten könnte (kurzfristig, langfristig, was helfen und was belasten könnte, worauf man achten kann), mit Ampel-Einstufung und Angabe, wie gut das belegt ist. **Bei KAP-Meldungen liest die KI den vollständigen Meldungstext** (das offizielle KAP-PDF). **Bei Presseartikeln liegt ihr nur die Überschrift vor**, weil Artikeltexte nicht frei abrufbar sind; die App sagt das ausdrücklich und deckelt die Sicherheit der Einschätzung. Das Original bleibt als Link erreichbar. Abgerufen wird erst beim Antippen, gespeichert je Meldung und Sprache (kostet also pro Meldung höchstens eine KI-Anfrage).
-- **Suche** (BIST, XETRA, US), **Einstellungen** (Sprache, Zugangscode, Verbindungstest, KI-Status, Liste sichern), **PWA** (installierbar, offlinefähige Hülle). Alarme folgen in Phase 5.
+- **Fonds (TEFAS):** eigener Reiter in der Suche, eigene Merkliste "Meine Fonds" (getrennt von den Aktien), Fonds-Detailseite mit Preis, Tagesänderung, Kategorie, Platz in der Kategorie, Anlegerzahl, Marktanteil, einfachem Kursverlauf (Woche bis 5 Jahre) und Vergleich mit Gold, BIST 100/30, Inflation (TÜFE), USD, EUR und Bankzins. Quelle ist TEFAS (Tefas.gov.tr), die offizielle Handelsplattform für Investment- und Rentenfonds in der Türkei; der Preis wird einmal täglich nach Börsenschluss aktualisiert, nicht in Echtzeit. Keine KI-Auswertung für Fonds (nur Zahlen aus TEFAS, keine Einschätzung).
+- **Suche** (BIST, XETRA, US, TEFAS-Fonds), **Einstellungen** (Sprache, Zugangscode, Verbindungstest, KI-Status, Liste sichern), **PWA** (installierbar, offlinefähige Hülle). Alarme folgen in Phase 5.
 
 ## So verhindert die App erfundene Zahlen
 
@@ -142,7 +144,8 @@ je API-Route eine eigenständig gebündelte Funktion. Derselbe Handler läuft im
 
 **API** (alle außer `health` mit `Authorization: Bearer <APP_TOKEN>`, sofern gesetzt): `/api/health`, `/api/quote?s=THYAO.IS,AAPL`,
 `/api/candles?s=…&tf=1T|1W|1M|6M|1J|5J`, `/api/history?s=…`, `/api/news?s=…&name=…`, `/api/search?q=…`,
-`/api/analysis?s=…&name=…[&lang=de|tr][&refresh=1]`, `/api/news-item?s=…&id=<Meldungs-ID>[&name=…][&lang=de|tr][&refresh=1]` (Erklärung einer einzelnen Meldung), `/api/news-analysis?s=…&name=…[&lang=de|tr][&refresh=1]` (503, solange kein KI-Key gesetzt ist).
+`/api/analysis?s=…&name=…[&lang=de|tr][&refresh=1]`, `/api/news-item?s=…&id=<Meldungs-ID>[&name=…][&lang=de|tr][&refresh=1]` (Erklärung einer einzelnen Meldung), `/api/news-analysis?s=…&name=…[&lang=de|tr][&refresh=1]` (503, solange kein KI-Key gesetzt ist),
+`/api/fund-search?q=…`, `/api/fund?code=AFT`, `/api/fund-history?code=…&period=week|month|3month|6month|ytd|year|3year|5year`, `/api/fund-benchmark?code=…&period=…` (Fonds, TEFAS, keine KI beteiligt).
 
 **KI-Anbieter** sind austauschbar (`LLMProvider`): Gemini → Groq → Ollama (nur lokal), nur konfigurierte werden genutzt, bei Ausfall springt die Kette weiter.
 Ein Claude-Anbieter lässt sich später als weitere Klasse ergänzen, ohne dass sich Auswertung oder Oberfläche ändern.
@@ -158,6 +161,7 @@ Ein Claude-Anbieter lässt sich später als weitere Klasse ergänzen, ohne dass 
 | Google News RSS | Nachrichten (tr/de/en) | Nur Titel, Link, Quelle, Datum. Die KI ordnet also nur nach Titel ein, nicht nach Volltext. Laut Google nur für persönlichen Gebrauch. |
 | Gemini / Groq | KI-Text | Gratis-Kontingente schwanken und sind teils nur über Drittquellen belegt. |
 | Twelve Data Free | – | **Kein BIST im Gratis-Plan**, daher nicht eingebunden. |
+| TEFAS (`tefas.gov.tr`) | Fondskurse, -kennzahlen, Vergleichswerte | Inoffizielle JSON-API der offiziellen Handelsplattform. Preis nur einmal täglich (nach Börsenschluss), kein Live-Kurs. Das Fondsverzeichnis (ca. 2.600 Fonds) wird serverseitig bis zu 6 Std. zwischengespeichert. |
 
 Für BIST gibt es gratis **keine offizielle Echtzeitquelle**. Die App ist ausschließlich für den privaten Gebrauch gedacht.
 
@@ -173,10 +177,11 @@ Für BIST gibt es gratis **keine offizielle Echtzeitquelle**. Die App ist aussch
 
 ## Tests
 
-`npm test` (367 Tests) prüft unter anderem:
+`npm test` (402 Tests) prüft unter anderem:
 
 - **Indikatoren gegen unabhängige pandas-Referenzwerte** (Toleranz 1e-7), plus von Hand nachgerechnete Fälle.
 - **Adapter** gegen aufgezeichnete Live-Antworten inklusive Fehlerfälle. **KI-Anbieter** (Gemini, Groq, Ollama) gegen nachgebildete Antworten inklusive Kontingent-, Schema- und Key-Fehlern.
+- **Fonds (TEFAS):** Suche (Kürzel exakt vor Präfix vor Namenstreffer, Zwischenspeicher), Fondsinfo, Zeitraum-Zuordnung (inkl. "Woche" als zugeschnittener Monat), Vergleichswerte mit erzwungener Reihenfolge (Fonds selbst zuerst), Fehlerfälle, gegen echte aufgezeichnete TEFAS-Antworten.
 - **Sprachen:** deutsches und türkisches Wörterbuch haben dieselben Schlüssel und Platzhalter, Systemmeldungen gibt es in beiden Sprachen, Formate ("1,50 %" bzw. "%1,50"), Spracherkennung, KI-Sprache in Prompt und Zwischenspeicher, Fachbegriffe tauchen in der Einfach-Ansicht nicht auf.
 - **Zahlen-Wächter:** deutsche, türkische und englische Zahlenformate, Rundung, Datum/Uhrzeit, erfundene Kurse, eingeschleuste Anweisungen.
 - **Auswertungen:** Kandidaten und Handelsplan mit echten THYAO-Daten, Währungsumrechnung, Prüfablauf mit Wiederholung, Zwischenspeicher, Mindestabstand, Tageslimit, Ausfälle.
