@@ -1,17 +1,18 @@
-import type { FundPeriod } from '@aktien/core';
+import { convertCandles, type FundPeriod } from '@aktien/core';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Chart } from '../components/Chart';
 import { ChangePill, ErrorNote, Segmented, Spinner } from '../components/ui';
 import { ApiError } from '../lib/api';
-import { buildFundChartData } from '../lib/fund-chart';
-import { periodStats } from '../lib/chart-model';
+import { FX_SYMBOL, periodStats, type ChartCurrency } from '../lib/chart-model';
+import { buildFundChartData, FUND_TZ, fundCandles } from '../lib/fund-chart';
 import { formatCount, formatDate, formatPercent, formatPrice } from '../lib/format';
-import { useFund, useFundBenchmark, useFundHistory } from '../lib/hooks';
+import { useFund, useFundBenchmark, useFundHistory, useHistory } from '../lib/hooks';
 import { useT } from '../lib/i18n';
 import { fundStore, useFundWatchlist } from '../lib/funds-store';
 
 const PERIODS: readonly FundPeriod[] = ['week', 'month', '3month', '6month', 'ytd', 'year', '3year', '5year'];
+const CURRENCIES: readonly ChartCurrency[] = ['TRY', 'USD', 'EUR'];
 
 /** YYYY-MM-DD (Istanbuler Kalendertag von TEFAS) → Unix-Millisekunden, für die lokale Datumsformatierung. */
 function dateMs(isoDate: string): number {
@@ -24,6 +25,7 @@ export function FundDetailScreen() {
   const code = decodeURIComponent(raw).toUpperCase();
   const navigate = useNavigate();
   const [period, setPeriod] = useState<FundPeriod>('6month');
+  const [currency, setCurrency] = useState<ChartCurrency>('TRY');
 
   const funds = useFundWatchlist();
   const item = funds.find((f) => f.code === code);
@@ -32,7 +34,17 @@ export function FundDetailScreen() {
   const history = useFundHistory(code, period);
   const benchmark = useFundBenchmark(code, period);
 
-  const data = useMemo(() => (history.data ? buildFundChartData(history.data) : undefined), [history.data]);
+  // Fonds sind immer in Lira notiert; für den Chart wird bei Bedarf mit dem Tageskurs umgerechnet (wie beim Aktienchart).
+  const needsFx = currency !== 'TRY';
+  const fx = useHistory(currency === 'EUR' ? FX_SYMBOL.EUR : FX_SYMBOL.USD, needsFx);
+
+  const rawCandles = useMemo(() => (history.data ? fundCandles(history.data) : undefined), [history.data]);
+  const candles = useMemo(() => {
+    if (!rawCandles) return undefined;
+    if (!needsFx) return rawCandles;
+    return fx.data ? convertCandles(rawCandles, fx.data.candles, FUND_TZ) : undefined;
+  }, [rawCandles, needsFx, fx.data]);
+  const data = candles ? buildFundChartData(candles) : undefined;
   const stats = data ? periodStats(data.candles) : null;
   const periodOptions = useMemo(() => PERIODS.map((p) => ({ value: p, label: t(`fund.p.${p}` as const) })), [t]);
 
@@ -104,9 +116,15 @@ export function FundDetailScreen() {
       </header>
 
       <Segmented options={periodOptions} value={period} label={t('chart.period')} onChange={setPeriod} />
+      <div className="currency-switch">
+        <span className="muted">{t('chart.currency')}:</span>
+        <Segmented options={CURRENCIES.map((value) => ({ value, label: t(`cur.${value}` as const) }))} value={currency} label={t('chart.currency')} onChange={setCurrency} />
+      </div>
 
       <div className="chart-wrap">
-        {history.isPending ? (
+        {needsFx && fx.isError ? (
+          <ErrorNote error={fx.error} onRetry={() => fx.refetch()} />
+        ) : history.isPending || (needsFx && fx.isPending) ? (
           <Spinner label={t('chart.loading')} />
         ) : history.isError ? (
           <ErrorNote error={history.error} onRetry={() => history.refetch()} />
@@ -125,14 +143,15 @@ export function FundDetailScreen() {
           </div>
           <div>
             <span className="muted">{t('chart.high')}</span>
-            <b>{formatPrice(stats.high, 'TRY')}</b>
+            <b>{formatPrice(stats.high, currency)}</b>
           </div>
           <div>
             <span className="muted">{t('chart.low')}</span>
-            <b>{formatPrice(stats.low, 'TRY')}</b>
+            <b>{formatPrice(stats.low, currency)}</b>
           </div>
         </div>
       )}
+      {needsFx && <p className="row-hint pad">{t('chart.currencyNote', { currency })}</p>}
 
       <section className="group">
         <h3>{t('fund.benchmarkTitle')}</h3>

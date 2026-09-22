@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { FundPricePoint } from '@aktien/core';
-import { buildFundChartData } from '../src/lib/fund-chart';
+import { convertCandles, type Candle, type FundPricePoint } from '@aktien/core';
+import { buildFundChartData, fundCandles } from '../src/lib/fund-chart';
 import { FundStore, sanitizeFunds } from '../src/lib/funds-store';
 import type { StorageLike } from '../src/lib/storage';
 
@@ -112,7 +112,7 @@ describe('FundStore', () => {
   });
 });
 
-describe('buildFundChartData', () => {
+describe('fundCandles', () => {
   const points: FundPricePoint[] = [
     { date: '2026-08-01', price: 1.0 },
     { date: '2026-08-02', price: 1.02 },
@@ -120,18 +120,36 @@ describe('buildFundChartData', () => {
   ];
 
   it('setzt Open/High/Low/Close auf den einen Tagespreis (Fonds haben keine Kursspanne)', () => {
-    const data = buildFundChartData(points);
-    expect(data.candles).toHaveLength(3);
-    for (const c of data.candles) {
+    const candles = fundCandles(points);
+    expect(candles).toHaveLength(3);
+    for (const c of candles) {
       expect(c.open).toBe(c.close);
       expect(c.high).toBe(c.close);
       expect(c.low).toBe(c.close);
+      expect(c.volume).toBe(0);
     }
-    expect(data.candles.map((c) => c.close)).toEqual([1.0, 1.02, 0.98]);
+    expect(candles.map((c) => c.close)).toEqual([1.0, 1.02, 0.98]);
   });
 
+  it('legt jeden Tag auf Mittag UTC (bleibt in Istanbul am selben Kalendertag, auch über die Zeitzone gerechnet)', () => {
+    const [c] = fundCandles([{ date: '2026-08-01', price: 1 }]);
+    expect(new Date(c!.time * 1000).toISOString()).toBe('2026-08-01T12:00:00.000Z');
+  });
+
+  it('kommt mit leeren Daten klar', () => {
+    expect(fundCandles([])).toEqual([]);
+  });
+});
+
+describe('buildFundChartData', () => {
+  const points: FundPricePoint[] = [
+    { date: '2026-08-01', price: 1.0 },
+    { date: '2026-08-02', price: 1.02 },
+    { date: '2026-08-03', price: 0.98 },
+  ];
+
   it('ordnet die Kalendertage streng aufsteigend zu (kein Sommerzeit-Versatz)', () => {
-    const data = buildFundChartData(points);
+    const data = buildFundChartData(fundCandles(points));
     expect(data.candles.map((c) => c.time)).toEqual([
       { year: 2026, month: 8, day: 1 },
       { year: 2026, month: 8, day: 2 },
@@ -140,12 +158,22 @@ describe('buildFundChartData', () => {
   });
 
   it('liefert keine Indikatoren und kein Volumen (nicht sinnvoll bei nur einem Preis pro Tag)', () => {
-    const data = buildFundChartData(points);
+    const data = buildFundChartData(fundCandles(points));
     expect(data.indicators).toBeNull();
     expect(data.volume.every((v) => v.value === 0)).toBe(true);
   });
 
   it('kommt mit leeren Daten klar', () => {
     expect(buildFundChartData([]).candles).toEqual([]);
+  });
+
+  it('lässt sich mit convertCandles in eine andere Währung umrechnen (wie beim Aktienchart)', () => {
+    const fx: Candle[] = [
+      { time: fundCandles([{ date: '2026-08-01', price: 0 }])[0]!.time, open: 40, high: 40, low: 40, close: 40, volume: 0 },
+      { time: fundCandles([{ date: '2026-08-03', price: 0 }])[0]!.time, open: 41, high: 41, low: 41, close: 41, volume: 0 },
+    ];
+    const usd = convertCandles(fundCandles(points), fx, 'Europe/Istanbul');
+    const data = buildFundChartData(usd);
+    expect(data.candles.map((c) => c.close)).toEqual([1.0 / 40, 1.02 / 40, 0.98 / 41]);
   });
 });
