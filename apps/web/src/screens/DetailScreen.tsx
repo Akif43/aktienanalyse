@@ -2,6 +2,7 @@ import { computeFxPerformance, computeTechnicalSnapshot, msg as coreMsg, parseIn
 import { useMemo } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AdvancedAnalysis, AiUnavailable, VerdictCard } from '../components/AnalysisCard';
+import { AlertsPanel } from '../components/AlertsPanel';
 import { Collapsible } from '../components/Collapsible';
 import { Glance } from '../components/Glance';
 import { Glossary } from '../components/Glossary';
@@ -131,12 +132,7 @@ export function DetailScreen() {
           onClose={() => (location.state && (location.state as { fromList?: boolean }).fromList ? navigate(-1) : setParams({ tab: 'news' }, { replace: true }))}
         />
       )}
-      {tab === 'alarme' && (
-        <section className="empty">
-          <p className="empty-title">{t('alerts.title')}</p>
-          <p className="muted">{t('alerts.text')}</p>
-        </section>
-      )}
+      {tab === 'alarme' && <AlertsPanel ticker={ticker} currency={quote?.currency} />}
     </main>
   );
 }

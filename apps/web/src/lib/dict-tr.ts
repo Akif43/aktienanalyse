@@ -120,9 +120,19 @@ export const tr: Record<DictKey, string> = {
   'tab.overview': 'Özet',
   'tab.news': 'Haberler',
   'tab.alerts': 'Alarmlar',
-  'alerts.title': 'Bildirimler yakında geliyor',
-  'alerts.text':
-    'Planlanan: Fiyat belirlediğin sınıra ulaştığında, hisse sert düştüğünde veya yükseldiğinde ya da önemli bir şirket haberi çıktığında telefonuna bildirim gelecek. Her hisse için ayrı ayrı açılıp kapatılabilecek ve yalnızca borsa açıkken çalışacak.',
+  'alerts.intro': 'Hangi konularda bildirim almak istediğini aç/kapat. Alarmlar yalnızca borsa açıkken gelir, kural başına günde en fazla 3.',
+  'alerts.dailyLow': 'Yeni gün dip fiyatı',
+  'alerts.range52w': '52 haftalık zirve/dip',
+  'alerts.priceAbove': 'Fiyat üzeri',
+  'alerts.priceBelow': 'Fiyat altı',
+  'alerts.dailyMove': 'Güçlü günlük hareket (%)',
+  'alerts.news': 'Önemli haber',
+  'alerts.on': 'Açık',
+  'alerts.off': 'Kapalı',
+  'alerts.thresholdMissing': 'Açık bir kural için sayı henüz eksik.',
+  'alerts.save': 'Kaydet',
+  'alerts.saved': 'Kaydedildi',
+  'alerts.disclaimer': 'Bildirimler ntfy ve birkaç dakikada bir çalışan bir arka plan kontrolü üzerinden gider: bu yüzden alarmlar biraz gecikmeli gelir, saniyesi saniyesine değil.',
 
   // Değerlendirme (trafik ışığı)
   'verdict.title': 'Kısa özet',

@@ -122,9 +122,19 @@ export const de = {
   'tab.overview': 'Übersicht',
   'tab.news': 'Nachrichten',
   'tab.alerts': 'Alarme',
-  'alerts.title': 'Benachrichtigungen kommen bald',
-  'alerts.text':
-    'Geplant: Du bekommst eine Nachricht aufs Handy, wenn der Preis eine Grenze erreicht, die Aktie stark fällt oder steigt oder eine wichtige Firmenmeldung erscheint. Alles pro Aktie ein- und ausschaltbar und nur, wenn die Börse geöffnet ist.',
+  'alerts.intro': 'Schalte ein, worüber du per Push benachrichtigt werden willst. Alarme kommen nur, während die Börse geöffnet ist, höchstens 3 am Tag je Regel.',
+  'alerts.dailyLow': 'Neues Tagestief',
+  'alerts.range52w': '52-Wochen-Hoch/-Tief',
+  'alerts.priceAbove': 'Kurs über',
+  'alerts.priceBelow': 'Kurs unter',
+  'alerts.dailyMove': 'Starke Tagesbewegung (%)',
+  'alerts.news': 'Wichtige Meldung',
+  'alerts.on': 'An',
+  'alerts.off': 'Aus',
+  'alerts.thresholdMissing': 'Für eine eingeschaltete Regel fehlt noch die Zahl.',
+  'alerts.save': 'Speichern',
+  'alerts.saved': 'Gespeichert',
+  'alerts.disclaimer': 'Push läuft über ntfy und einen Hintergrund-Check alle paar Minuten: Alarme kommen deshalb leicht verzögert, nicht auf die Sekunde.',
 
   // Einschätzung (Ampel)
   'verdict.title': 'Kurzfazit',

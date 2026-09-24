@@ -1,6 +1,9 @@
 /** Unterstützte Handelsplätze. Steuert Yahoo-Suffix, Währung und Zeitzone. */
 export type Market = 'BIST' | 'US' | 'XETRA';
 
+/** Zeitzone je Handelsplatz, für Kalendertag-Berechnungen (z. B. Tageszähler bei Alarmen). */
+export const MARKET_TZ: Record<Market, string> = { BIST: 'Europe/Istanbul', XETRA: 'Europe/Berlin', US: 'America/New_York' };
+
 export interface Instrument {
   /** Kürzel ohne Suffix, z. B. THYAO, AAPL, SAP. */
   symbol: string;

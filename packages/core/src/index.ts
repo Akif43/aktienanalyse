@@ -28,6 +28,11 @@ export * from './adapters/fund/tefas';
 
 export * from './watchlist/watchlist';
 
+export * from './alerts/types';
+export * from './alerts/engine';
+export * from './notify/types';
+export * from './notify/ntfy';
+
 export * from './ai/types';
 export * from './ai/gemini';
 export * from './ai/openai-compatible';

@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { marketState, type Candle, type FundPeriod, type Timeframe } from '@aktien/core';
+import { marketState, type AlertRule, type Candle, type FundPeriod, type Timeframe } from '@aktien/core';
 import { FX_SYMBOL } from './currency';
 import { fundCandles } from './fund-chart';
 import { useLang } from './i18n';
@@ -235,4 +235,18 @@ export function usePortfolioHistory(positions: readonly PortfolioPosition[]) {
 
   const isPending = stockResults.some((r) => r.isPending) || fundResults.some((r) => r.isPending) || (hasPositions && (fxUsd.isPending || fxEur.isPending));
   return { priceHistory, fx: { USD: fxUsd.data?.candles ?? [], EUR: fxEur.data?.candles ?? [] }, isPending };
+}
+
+// --- Alarme -----------------------------------------------------------------------------------
+
+export function useAlerts(ticker: string) {
+  return useQuery({ queryKey: ['alerts', ticker], queryFn: () => api.alerts(ticker), staleTime: 60_000 });
+}
+
+export function useSaveAlerts(ticker: string) {
+  const client = useQueryClient();
+  return useMutation<{ rules: AlertRule[] }, Error, AlertRule[]>({
+    mutationFn: (rules) => api.saveAlerts(ticker, rules),
+    onSuccess: (data) => client.setQueryData(['alerts', ticker], data),
+  });
 }

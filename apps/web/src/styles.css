@@ -522,6 +522,18 @@ button {
 .row-value .row-hint {
   font-weight: 400;
 }
+.alerts-row-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.alerts-threshold {
+  width: 76px;
+  min-height: 36px;
+  padding: 0 10px;
+  text-align: right;
+}
 .pad {
   padding: 8px 16px;
 }

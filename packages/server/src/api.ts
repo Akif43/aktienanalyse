@@ -1,5 +1,6 @@
 import {
   AdapterError,
+  alertRuleId,
   AnalysisService,
   applyQuery,
   createLlmFromEnv,
@@ -7,6 +8,7 @@ import {
   createNewsService,
   DemoProvider,
   DEFAULT_LANG,
+  isAlertRuleType,
   isLang,
   MemoryKv,
   parseInstrument,
@@ -14,7 +16,9 @@ import {
   searchInstruments,
   SupabaseKv,
   TefasAdapter,
+  THRESHOLD_RULE_TYPES,
   type AdapterErrorCode,
+  type AlertRule,
   type FundAdapter,
   type FundPeriod,
   type Instrument,
@@ -58,6 +62,7 @@ export interface ApiDeps {
   cache?: TtlCache;
   analysis?: AnalysisService;
   aiInfo?: AiInfo;
+  kv?: KeyValueStore;
 }
 
 const TIMEFRAMES: readonly Timeframe[] = ['1T', '1W', '1M', '6M', '1J', '5J'];
@@ -130,6 +135,7 @@ export function createDeps(env: ApiEnv): ApiDeps {
     cache,
     analysis: new AnalysisService({ llm, kv, market: new CachingMarket(market, cache), news, kapText: (item) => fetchKapDocumentText(item), dailyLimit: Number.isFinite(limit) && limit > 0 ? limit : undefined }),
     aiInfo: { configured: llm !== null, providers, storage: persistent ? 'supabase' : 'memory' },
+    kv,
   };
 }
 
@@ -144,7 +150,8 @@ export function createApi(env: ApiEnv, deps: ApiDeps = createDeps(env)): (req: R
     try {
       const url = new URL(req.url);
       const route = url.pathname.replace(/\/+$/, '').replace(/^\/api\//, '');
-      if (req.method !== 'GET') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Nur GET erlaubt');
+      const methodAllowed = req.method === 'GET' || (route === 'alerts' && req.method === 'PUT');
+      if (!methodAllowed) throw new HttpError(405, 'METHOD_NOT_ALLOWED', route === 'alerts' ? 'Nur GET oder PUT erlaubt' : 'Nur GET erlaubt');
 
       if (route === 'health') {
         return json({ ok: true, authRequired: Boolean(env.APP_TOKEN), ai: deps.aiInfo ?? { configured: false, providers: [], storage: 'memory' }, time: new Date().toISOString() });
@@ -176,6 +183,8 @@ export function createApi(env: ApiEnv, deps: ApiDeps = createDeps(env)): (req: R
           return json(await fundHistory(url, deps, cache));
         case 'fund-benchmark':
           return json(await fundBenchmark(url, deps, cache));
+        case 'alerts':
+          return json(req.method === 'PUT' ? await saveAlertRules(req, url, deps) : await alertRules(url, deps));
         default:
           throw new HttpError(404, 'NOT_FOUND', `Unbekannte Route: ${route || '/'}`);
       }
@@ -300,6 +309,48 @@ async function fundBenchmark(url: URL, deps: ApiDeps, cache: TtlCache) {
   const code = requireFundCode(url);
   const period = fundPeriodFrom(url);
   return cache.get(`fb:${code}:${period}`, TTL.fundHistory, () => deps.fund.getBenchmark(code, period));
+}
+
+// --- Alarme --------------------------------------------------------------------------------
+
+const ALERT_RULES_KEY = 'alerts:rules';
+const MAX_RULES_PER_TICKER = 10;
+
+function requireKv(deps: ApiDeps): KeyValueStore {
+  if (!deps.kv) throw new HttpError(503, 'CONFIG', 'Alarme brauchen einen eingerichteten Zwischenspeicher (Supabase).');
+  return deps.kv;
+}
+
+async function alertRules(url: URL, deps: ApiDeps) {
+  const ticker = requireTicker(url);
+  const kv = requireKv(deps);
+  const all = (await kv.get<AlertRule[]>(ALERT_RULES_KEY))?.value ?? [];
+  return { rules: all.filter((r) => r.ticker === ticker) };
+}
+
+async function saveAlertRules(req: Request, url: URL, deps: ApiDeps) {
+  const ticker = requireTicker(url);
+  const kv = requireKv(deps);
+  const body = await req.json().catch(() => null);
+  const incoming = (body as { rules?: unknown })?.rules;
+  if (!Array.isArray(incoming) || incoming.length > MAX_RULES_PER_TICKER) throw new HttpError(400, 'BAD_REQUEST', 'rules muss ein Array sein (höchstens 10 Einträge)');
+
+  const rules = incoming.map((r) => validateAlertRule(r, ticker));
+  const all = (await kv.get<AlertRule[]>(ALERT_RULES_KEY))?.value ?? [];
+  const merged = [...all.filter((r) => r.ticker !== ticker), ...rules];
+  await kv.set(ALERT_RULES_KEY, merged);
+  return { rules };
+}
+
+function validateAlertRule(raw: unknown, ticker: string): AlertRule {
+  if (!raw || typeof raw !== 'object') throw new HttpError(400, 'BAD_REQUEST', 'Ungültige Regel');
+  const r = raw as { type?: unknown; enabled?: unknown; threshold?: unknown };
+  if (!isAlertRuleType(r.type)) throw new HttpError(400, 'BAD_REQUEST', `Unbekannter Regeltyp: ${String(r.type)}`);
+  if (typeof r.enabled !== 'boolean') throw new HttpError(400, 'BAD_REQUEST', 'enabled muss ein boolescher Wert sein');
+  const needsThreshold = (THRESHOLD_RULE_TYPES as readonly string[]).includes(r.type);
+  const threshold = typeof r.threshold === 'number' && Number.isFinite(r.threshold) ? r.threshold : undefined;
+  if (needsThreshold && r.enabled && threshold === undefined) throw new HttpError(400, 'BAD_REQUEST', `Regel ${r.type} braucht einen gültigen Schwellenwert`);
+  return { id: alertRuleId(ticker, r.type), ticker, type: r.type, enabled: r.enabled, ...(threshold !== undefined ? { threshold } : {}) };
 }
 
 function requireFundCode(url: URL): string {

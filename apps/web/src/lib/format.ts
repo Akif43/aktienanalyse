@@ -1,8 +1,7 @@
-import type { Freshness, Market } from '@aktien/core';
+import { MARKET_TZ, type Freshness, type Market } from '@aktien/core';
 import { getLang, localeOf, translate, type Lang } from './i18n';
 
-const TZ: Record<Market, string> = { BIST: 'Europe/Istanbul', XETRA: 'Europe/Berlin', US: 'America/New_York' };
-export const marketTimezone = (m: Market) => TZ[m];
+export const marketTimezone = (m: Market) => MARKET_TZ[m];
 
 const MARKET_NAME: Record<Market, string> = { BIST: 'BIST', XETRA: 'XETRA', US: 'US' };
 export const marketName = (m: Market) => MARKET_NAME[m];
@@ -65,7 +64,7 @@ const dayKey = (ms: number, tz: string, lang: Lang) => new Intl.DateTimeFormat(l
 
 /** Uhrzeit (heute) bzw. Datum und Uhrzeit eines Kurses in der Zeitzone der Börse. */
 export function formatAsOf(unixSec: number, market: Market, nowMs: number = Date.now(), lang: Lang = getLang()): string {
-  const tz = TZ[market];
+  const tz = MARKET_TZ[market];
   const ms = unixSec * 1000;
   const locale = localeOf(lang);
   if (dayKey(ms, tz, lang) === dayKey(nowMs, tz, lang)) {

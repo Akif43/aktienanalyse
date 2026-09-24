@@ -21,6 +21,7 @@
     "icons": "node tools/make-icons.mjs",
     "analyze": "tsx scripts/analyze.ts",
     "check:ai": "tsx scripts/check-ai-endpoints.ts",
+    "monitor": "tsx scripts/monitor.ts",
     "start": "node tools/serve-prod.mjs"
   },
   "devDependencies": {

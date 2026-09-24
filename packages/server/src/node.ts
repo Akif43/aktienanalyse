@@ -13,9 +13,18 @@ export function toNodeHandler(handler: (req: Request) => Promise<Response>) {
       if (typeof v === 'string') headers.set(k, v);
       else if (Array.isArray(v)) headers.set(k, v.join(', '));
     }
+    const method = req.method ?? 'GET';
+    // GET/HEAD dürfen im Web-Standard-Request keinen Body haben; alle anderen Methoden puffern ihn (die
+    // Anfragen hier sind klein, JSON-Regeln, kein Streaming nötig).
+    let body: Buffer | undefined;
+    if (method !== 'GET' && method !== 'HEAD') {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(chunk as Buffer);
+      body = Buffer.concat(chunks);
+    }
     let response: Response;
     try {
-      response = await handler(new Request(`${proto}://${host}${req.url ?? '/'}`, { method: req.method, headers }));
+      response = await handler(new Request(`${proto}://${host}${req.url ?? '/'}`, { method, headers, body: body as BodyInit | undefined }));
     } catch (err) {
       console.error('Handler-Fehler', err);
       response = new Response(JSON.stringify({ error: { code: 'INTERNAL', message: 'Interner Fehler' } }), {

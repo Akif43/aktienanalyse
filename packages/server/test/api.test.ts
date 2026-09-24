@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AdapterError, type FundAdapter, type MarketDataAdapter, type NewsService, type Quote } from '@aktien/core';
+import { AdapterError, MemoryKv, type AlertRule, type FundAdapter, type MarketDataAdapter, type NewsService, type Quote } from '@aktien/core';
 import { createApi, safeEqual, toNodeHandler, TtlCache, type ApiDeps } from '../src';
 
 const quote = (symbol: string, price = 100): Quote => ({
@@ -22,7 +22,7 @@ const quote = (symbol: string, price = 100): Quote => ({
   source: 'fake',
 });
 
-function fakeDeps(overrides: Partial<{ market: Partial<MarketDataAdapter>; news: Partial<NewsService>; search: ApiDeps['search']; fund: Partial<FundAdapter> }> = {}) {
+function fakeDeps(overrides: Partial<{ market: Partial<MarketDataAdapter>; news: Partial<NewsService>; search: ApiDeps['search']; fund: Partial<FundAdapter>; kv: ApiDeps['kv'] }> = {}) {
   const market = {
     id: 'fake',
     supports: () => true,
@@ -43,11 +43,14 @@ function fakeDeps(overrides: Partial<{ market: Partial<MarketDataAdapter>; news:
     getBenchmark: vi.fn(async () => []),
     ...overrides.fund,
   } as unknown as FundAdapter & { search: ReturnType<typeof vi.fn>; getFund: ReturnType<typeof vi.fn>; getHistory: ReturnType<typeof vi.fn>; getBenchmark: ReturnType<typeof vi.fn> };
-  return { deps: { market, news, search, fund } as unknown as ApiDeps, market, news, search: search as ReturnType<typeof vi.fn>, fund };
+  return { deps: { market, news, search, fund, kv: overrides.kv } as unknown as ApiDeps, market, news, search: search as ReturnType<typeof vi.fn>, fund };
 }
 
 const get = (api: (r: Request) => Promise<Response>, path: string, headers: Record<string, string> = {}) =>
   api(new Request(`https://app.test${path}`, { headers }));
+
+const put = (api: (r: Request) => Promise<Response>, path: string, body: unknown, headers: Record<string, string> = {}) =>
+  api(new Request(`https://app.test${path}`, { method: 'PUT', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) }));
 
 describe('Zugriffsschutz', () => {
   it('health ist offen und verrät nur, ob ein Token nötig ist', async () => {
@@ -289,6 +292,21 @@ describe('toNodeHandler (echter HTTP-Server)', () => {
     expect(ok.headers.get('cache-control')).toBe('no-store');
   });
 
+  it('reicht auch den Request-Body durch (PUT), nicht nur GET ohne Body', async () => {
+    const { deps } = fakeDeps({ kv: new MemoryKv() });
+    server = createServer(toNodeHandler(createApi({}, deps)));
+    await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+    const res = await fetch(`${base}/api/alerts?s=THYAO.IS`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ rules: [{ type: 'priceAbove', enabled: true, threshold: 300 }] }),
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).rules).toEqual([{ id: 'THYAO.IS:priceAbove', ticker: 'THYAO.IS', type: 'priceAbove', enabled: true, threshold: 300 }]);
+  });
+
   it('fängt Fehler im Handler ab', async () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     server = createServer(
@@ -369,5 +387,75 @@ describe('Fonds (TEFAS)', () => {
     const api = createApi({ APP_TOKEN: 't' }, deps);
     expect((await get(api, '/api/fund-search?q=aft')).status).toBe(401);
     expect((await get(api, '/api/fund-search?q=aft', { authorization: 'Bearer t' })).status).toBe(200);
+  });
+});
+
+describe('Alarme', () => {
+  const priceAbove: AlertRule = { id: 'THYAO.IS:priceAbove', ticker: 'THYAO.IS', type: 'priceAbove', enabled: true, threshold: 300 };
+
+  it('liefert eine leere Liste ohne gespeicherte Regeln', async () => {
+    const { deps } = fakeDeps({ kv: new MemoryKv() });
+    const res = await get(createApi({}, deps), '/api/alerts?s=THYAO.IS');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ rules: [] });
+  });
+
+  it('speichert gültige Regeln und liefert nur die des angefragten Tickers', async () => {
+    const kv = new MemoryKv();
+    const { deps } = fakeDeps({ kv });
+    const api = createApi({}, deps);
+
+    const putRes = await put(api, '/api/alerts?s=THYAO.IS', { rules: [{ type: 'priceAbove', enabled: true, threshold: 300 }, { type: 'dailyLow', enabled: false }] });
+    expect(putRes.status).toBe(200);
+    expect((await putRes.json()).rules).toHaveLength(2);
+
+    await put(api, '/api/alerts?s=AAPL', { rules: [{ type: 'priceBelow', enabled: true, threshold: 100 }] });
+    const getRes = await get(api, '/api/alerts?s=THYAO.IS');
+    expect((await getRes.json()).rules).toEqual([
+      { id: 'THYAO.IS:priceAbove', ticker: 'THYAO.IS', type: 'priceAbove', enabled: true, threshold: 300 },
+      { id: 'THYAO.IS:dailyLow', ticker: 'THYAO.IS', type: 'dailyLow', enabled: false },
+    ]);
+  });
+
+  it('ein erneutes PUT ersetzt nur die Regeln dieses Tickers, andere bleiben erhalten', async () => {
+    const kv = new MemoryKv();
+    await kv.set('alerts:rules', [priceAbove, { id: 'AAPL:dailyLow', ticker: 'AAPL', type: 'dailyLow', enabled: true }]);
+    const { deps } = fakeDeps({ kv });
+    const api = createApi({}, deps);
+
+    await put(api, '/api/alerts?s=THYAO.IS', { rules: [{ type: 'priceAbove', enabled: false, threshold: 350 }] });
+    const all = (await kv.get<AlertRule[]>('alerts:rules'))?.value ?? [];
+    expect(all).toHaveLength(2);
+    expect(all.find((r) => r.ticker === 'AAPL')).toBeDefined();
+    expect(all.find((r) => r.ticker === 'THYAO.IS')).toMatchObject({ enabled: false, threshold: 350 });
+  });
+
+  it('lehnt ungültige Regeln ab (unbekannter Typ, fehlendes enabled, fehlender Schwellenwert)', async () => {
+    const { deps } = fakeDeps({ kv: new MemoryKv() });
+    const api = createApi({}, deps);
+    expect((await put(api, '/api/alerts?s=THYAO.IS', { rules: [{ type: 'unsinn', enabled: true }] })).status).toBe(400);
+    expect((await put(api, '/api/alerts?s=THYAO.IS', { rules: [{ type: 'priceAbove' }] })).status).toBe(400);
+    expect((await put(api, '/api/alerts?s=THYAO.IS', { rules: [{ type: 'priceAbove', enabled: true }] })).status).toBe(400);
+    expect((await put(api, '/api/alerts?s=THYAO.IS', { rules: 'kaputt' })).status).toBe(400);
+    expect((await put(api, '/api/alerts?s=THYAO.IS', { rules: Array.from({ length: 11 }, () => ({ type: 'dailyLow', enabled: true })) })).status).toBe(400);
+  });
+
+  it('ohne eingerichteten Zwischenspeicher: 503 statt eines internen Fehlers', async () => {
+    const { deps } = fakeDeps();
+    const res = await get(createApi({}, deps), '/api/alerts?s=THYAO.IS');
+    expect(res.status).toBe(503);
+  });
+
+  it('POST auf /api/alerts bleibt verboten (nur GET/PUT)', async () => {
+    const { deps } = fakeDeps({ kv: new MemoryKv() });
+    const res = await createApi({}, deps)(new Request('https://x/api/alerts?s=THYAO.IS', { method: 'POST' }));
+    expect(res.status).toBe(405);
+  });
+
+  it('verlangt weiterhin das Zugriffstoken', async () => {
+    const { deps } = fakeDeps({ kv: new MemoryKv() });
+    const api = createApi({ APP_TOKEN: 't' }, deps);
+    expect((await get(api, '/api/alerts?s=THYAO.IS')).status).toBe(401);
+    expect((await get(api, '/api/alerts?s=THYAO.IS', { authorization: 'Bearer t' })).status).toBe(200);
   });
 });

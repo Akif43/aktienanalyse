@@ -1,4 +1,4 @@
-import type { CandleSeries, Envelope, Fund, FundBenchmarkPoint, FundPeriod, FundPricePoint, FundSearchResult, Lang, NewsItemDetail, NewsAnalysis, NewsItem, Quote, SearchResult, TechnicalAnalysis, Timeframe } from '@aktien/core';
+import type { AlertRule, CandleSeries, Envelope, Fund, FundBenchmarkPoint, FundPeriod, FundPricePoint, FundSearchResult, Lang, NewsItemDetail, NewsAnalysis, NewsItem, Quote, SearchResult, TechnicalAnalysis, Timeframe } from '@aktien/core';
 import { appStorage, TOKEN_KEY } from './storage';
 
 export class ApiError extends Error {
@@ -36,18 +36,10 @@ export function getToken(): string {
   return appStorage.getItem(TOKEN_KEY) ?? '';
 }
 
-export async function apiGet<T>(
-  route: string,
-  params: Record<string, string | number | undefined> = {},
-  signal?: AbortSignal,
-): Promise<T> {
-  const qs = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') qs.set(k, String(v));
-  const token = getToken();
-
+async function handleResponse<T>(fetchIt: () => Promise<Response>): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`/api/${route}?${qs}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal });
+    res = await fetchIt();
   } catch (err) {
     if ((err as Error).name === 'AbortError') throw err;
     throw new ApiError('NETWORK', 'Keine Verbindung zum Server', 0);
@@ -66,6 +58,30 @@ export async function apiGet<T>(
     window.dispatchEvent(new Event(AUTHORIZED_EVENT));
   }
   return body as T;
+}
+
+export async function apiGet<T>(
+  route: string,
+  params: Record<string, string | number | undefined> = {},
+  signal?: AbortSignal,
+): Promise<T> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') qs.set(k, String(v));
+  const token = getToken();
+  return handleResponse(() => fetch(`/api/${route}?${qs}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal }));
+}
+
+export async function apiPut<T>(route: string, params: Record<string, string | number | undefined>, body: unknown): Promise<T> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') qs.set(k, String(v));
+  const token = getToken();
+  return handleResponse(() =>
+    fetch(`/api/${route}?${qs}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+    }),
+  );
 }
 
 export interface HealthResponse {
@@ -92,4 +108,6 @@ export const api = {
   fund: (code: string) => apiGet<Fund>('fund', { code }),
   fundHistory: (code: string, period: FundPeriod) => apiGet<FundPricePoint[]>('fund-history', { code, period }),
   fundBenchmark: (code: string, period: FundPeriod) => apiGet<FundBenchmarkPoint[]>('fund-benchmark', { code, period }),
+  alerts: (ticker: string) => apiGet<{ rules: AlertRule[] }>('alerts', { s: ticker }),
+  saveAlerts: (ticker: string, rules: AlertRule[]) => apiPut<{ rules: AlertRule[] }>('alerts', { s: ticker }, { rules }),
 };
