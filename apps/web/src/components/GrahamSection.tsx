@@ -111,6 +111,7 @@ function Notes({ fundamentals, result, usesManual, mixedSeries }: { fundamentals
   for (const w of fundamentals?.warnings ?? []) {
     if (w.code === 'sourceFallback') lines.push(t('graham.warn.sourceFallback', { reason: w.reason }));
     else if (w.code === 'edgarFallback') lines.push(t('graham.warn.edgarFallback', { reason: w.reason }));
+    else if (w.code === 'referenceHistory') lines.push(t('graham.warn.referenceHistory', { from: w.from, to: w.to, source: w.source }));
     else lines.push(t(`graham.warn.${w.code}` as const));
   }
   if (usesManual) lines.push(t('graham.manualUsed'));

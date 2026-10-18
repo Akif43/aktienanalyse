@@ -3,6 +3,7 @@ import { AdapterError } from '../../errors';
 import type { HttpOptions } from '../../http';
 import type { Instrument } from '../../types';
 import { IS_YATIRIM_MAX_BLOCKS, IsYatirimFundamentals } from './isyatirim-fundamentals';
+import { referenceYearsBefore } from './reference-history';
 import { SecFundamentals } from './sec-fundamentals';
 import type { Fundamentals, FundamentalsWarning, FundamentalsYear } from './types';
 import { YahooFundamentals, type YahooStatementYear } from './yahoo-fundamentals';
@@ -93,7 +94,11 @@ export class FundamentalsService {
       const yahooYears = yhR.status === 'fulfilled' ? yhR.value : [];
       if (isUsdReporter(merged, yahooYears)) {
         warnings.push({ code: 'usdReporter' });
-        const years = yahooYears.filter((y) => y.netIncome !== null).map((y) => withFx({ year: y.year, netIncome: y.netIncome as number, ebit: y.operatingIncome }));
+        const yahooSeries = yahooYears.filter((y) => y.netIncome !== null).map((y) => ({ year: y.year, netIncome: y.netIncome as number, ebit: y.operatingIncome }));
+        // Yahoo hat nur 4 Jahre: ältere Jahre kommen, wo vorhanden, aus den fest hinterlegten Jahresberichten (ebenfalls USD).
+        const reference = referenceYearsBefore(instrument.symbol, yahooSeries[0]?.year ?? year);
+        if (reference) warnings.push({ code: 'referenceHistory', from: reference.years[0]!.year, to: reference.years.at(-1)!.year, source: reference.source });
+        const years = [...(reference?.years ?? []), ...yahooSeries].map((y) => withFx(y));
         return { ...base, source: 'yahoo', reportingCurrency: 'USD', years, shares: is.shares, netDebt: is.netDebt, equity: is.equity, warnings };
       }
       const years = merged.map((y) => withFx(y));

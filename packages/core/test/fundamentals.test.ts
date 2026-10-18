@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AdapterError, FundamentalsService, IsYatirimFundamentals, YahooFundamentals, type Instrument } from '../src';
+import { AdapterError, FundamentalsService, IsYatirimFundamentals, referenceYearsBefore, USD_REPORTER_HISTORY, YahooFundamentals, type Instrument } from '../src';
 import { readFixture } from './helpers';
 import { json, mockFetch, text } from './mock-fetch';
 
@@ -183,6 +183,21 @@ describe('IsYatirimFundamentals', () => {
   });
 });
 
+describe('fest hinterlegte Jahresberichte (USD-Berichter)', () => {
+  it('liefert nur Jahre vor der automatischen Reihe, nie ein Jahr doppelt', () => {
+    expect(referenceYearsBefore('THYAO', 2022)!.years.map((y) => y.year)).toEqual([2016, 2017, 2018, 2019, 2020, 2021]);
+    expect(referenceYearsBefore('thyao', 2019)!.years.map((y) => y.year)).toEqual([2016, 2017, 2018]);
+    expect(referenceYearsBefore('THYAO', 2016)).toBeNull();
+  });
+  it('unbekannte Unternehmen haben keine hinterlegten Jahre', () => {
+    expect(referenceYearsBefore('TUPRS', 2025)).toBeNull();
+  });
+  it('Werte stimmen mit den Jahresberichten überein (Mio. USD, Nettogewinn und Betriebsergebnis)', () => {
+    const byYear = Object.fromEntries(USD_REPORTER_HISTORY.THYAO!.years.map((y) => [y.year, [y.netIncome / 1e6, y.ebit / 1e6]]));
+    expect(byYear).toEqual({ 2016: [-77, -130], 2017: [223, 1301], 2018: [753, 1413], 2019: [788, 1047], 2020: [-836, -163], 2021: [959, 1689] });
+  });
+});
+
 describe('FundamentalsService', () => {
   const now = () => new Date('2026-10-18T10:00:00Z');
 
@@ -225,9 +240,14 @@ describe('FundamentalsService', () => {
     expect(f.warnings).toContainEqual({ code: 'usdReporter' });
     expect(f.reportingCurrency).toBe('USD');
     expect(f.source).toBe('yahoo');
-    expect(f.years.map((y) => y.year)).toEqual([2022, 2023, 2024, 2025]);
-    expect(f.years[1]!.netIncome).toBeCloseTo(6.02e9, -7); // echter USD-Wert 2023, nicht der in TL umgerechnete
-    expect(f.years[1]!.ebit).toBeCloseTo(2.94e9, -7);
+    // 2022–2025 von Yahoo, davor die fest hinterlegten Jahresberichte (2016–2021)
+    expect(f.years.map((y) => y.year)).toEqual([2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]);
+    expect(f.warnings.find((w) => w.code === 'referenceHistory')).toMatchObject({ from: 2016, to: 2021 });
+    const y2023 = f.years.find((y) => y.year === 2023)!;
+    expect(y2023.netIncome).toBeCloseTo(6.02e9, -7); // echter USD-Wert 2023, nicht der in TL umgerechnete
+    expect(y2023.ebit).toBeCloseTo(2.94e9, -7);
+    expect(f.years.find((y) => y.year === 2020)).toMatchObject({ netIncome: -836e6, ebit: -163e6 }); // hinterlegt, USD
+    expect(f.years.find((y) => y.year === 2025)!.netIncome).toBeCloseTo(2.91e9, -7); // Yahoo bleibt maßgeblich für neuere Jahre
     expect(f.shares).toBe(1_380_000_000);
     expect(f.netDebt).toBeGreaterThan(500e9); // TL, passt zum TL-Börsenwert
   });

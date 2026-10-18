@@ -18,7 +18,9 @@ export type FundamentalsWarning =
   /** US-Aktie, aber `SEC_CONTACT` fehlt: EDGAR (bis zu 12 Jahre) wird übersprungen, es bleiben Yahoos 4 Jahre. */
   | { code: 'secNotConfigured' }
   /** EDGAR war nicht erreichbar oder lieferte unbrauchbare Daten: Ersatzreihe aus Yahoo. */
-  | { code: 'edgarFallback'; reason: string };
+  | { code: 'edgarFallback'; reason: string }
+  /** Ältere Jahre (`from` bis `to`) sind aus den Jahresberichten des Unternehmens fest hinterlegt (USD-Berichter, bei denen keine Quelle mehr als 4 Jahre liefert). */
+  | { code: 'referenceHistory'; from: number; to: number; source: string };
 
 /** Bilanzdaten für die Graham-Bewertung. Eine Reihe stammt immer aus genau einer Quelle (nie gemischt). */
 export interface Fundamentals {
