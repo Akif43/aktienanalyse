@@ -7,6 +7,7 @@ import {
   createMarketData,
   createNewsService,
   DemoProvider,
+  FundamentalsService,
   DEFAULT_LANG,
   isAlertRuleType,
   isLang,
@@ -63,6 +64,7 @@ export interface ApiDeps {
   analysis?: AnalysisService;
   aiInfo?: AiInfo;
   kv?: KeyValueStore;
+  fundamentals?: FundamentalsService;
 }
 
 const TIMEFRAMES: readonly Timeframe[] = ['1T', '1W', '1M', '6M', '1J', '5J'];
@@ -79,6 +81,8 @@ const TTL = {
   /** TEFAS aktualisiert den Nettoinventarwert einmal täglich (nach Handelsschluss): kurzer Cache reicht. */
   fund: 15 * 60_000,
   fundHistory: 15 * 60_000,
+  /** Jahresabschlüsse ändern sich selten. */
+  fundamentals: 6 * 60 * 60_000,
 };
 
 const FUND_PERIODS: readonly FundPeriod[] = ['week', 'month', '3month', '6month', 'ytd', 'year', '3year', '5year'];
@@ -136,6 +140,7 @@ export function createDeps(env: ApiEnv): ApiDeps {
     analysis: new AnalysisService({ llm, kv, market: new CachingMarket(market, cache), news, kapText: (item) => fetchKapDocumentText(item), dailyLimit: Number.isFinite(limit) && limit > 0 ? limit : undefined }),
     aiInfo: { configured: llm !== null, providers, storage: persistent ? 'supabase' : 'memory' },
     kv,
+    fundamentals: new FundamentalsService(),
   };
 }
 
@@ -183,6 +188,8 @@ export function createApi(env: ApiEnv, deps: ApiDeps = createDeps(env)): (req: R
           return json(await fundHistory(url, deps, cache));
         case 'fund-benchmark':
           return json(await fundBenchmark(url, deps, cache));
+        case 'fundamentals':
+          return json(await fundamentals(url, deps, cache));
         case 'alerts':
           return json(req.method === 'PUT' ? await saveAlertRules(req, url, deps) : await alertRules(url, deps));
         default:
@@ -309,6 +316,14 @@ async function fundBenchmark(url: URL, deps: ApiDeps, cache: TtlCache) {
   const code = requireFundCode(url);
   const period = fundPeriodFrom(url);
   return cache.get(`fb:${code}:${period}`, TTL.fundHistory, () => deps.fund.getBenchmark(code, period));
+}
+
+async function fundamentals(url: URL, deps: ApiDeps, cache: TtlCache) {
+  const service = deps.fundamentals;
+  if (!service) throw new HttpError(503, 'CONFIG', 'Bilanzdaten sind nicht eingerichtet.');
+  const ticker = requireTicker(url);
+  const inst = instrumentFrom(ticker);
+  return cache.get(`fu:${ticker}`, TTL.fundamentals, () => service.get(inst));
 }
 
 // --- Alarme --------------------------------------------------------------------------------

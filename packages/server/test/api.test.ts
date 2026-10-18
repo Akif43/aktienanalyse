@@ -22,7 +22,7 @@ const quote = (symbol: string, price = 100): Quote => ({
   source: 'fake',
 });
 
-function fakeDeps(overrides: Partial<{ market: Partial<MarketDataAdapter>; news: Partial<NewsService>; search: ApiDeps['search']; fund: Partial<FundAdapter>; kv: ApiDeps['kv'] }> = {}) {
+function fakeDeps(overrides: Partial<{ market: Partial<MarketDataAdapter>; news: Partial<NewsService>; search: ApiDeps['search']; fund: Partial<FundAdapter>; kv: ApiDeps['kv']; fundamentals: ApiDeps['fundamentals'] }> = {}) {
   const market = {
     id: 'fake',
     supports: () => true,
@@ -43,7 +43,7 @@ function fakeDeps(overrides: Partial<{ market: Partial<MarketDataAdapter>; news:
     getBenchmark: vi.fn(async () => []),
     ...overrides.fund,
   } as unknown as FundAdapter & { search: ReturnType<typeof vi.fn>; getFund: ReturnType<typeof vi.fn>; getHistory: ReturnType<typeof vi.fn>; getBenchmark: ReturnType<typeof vi.fn> };
-  return { deps: { market, news, search, fund, kv: overrides.kv } as unknown as ApiDeps, market, news, search: search as ReturnType<typeof vi.fn>, fund };
+  return { deps: { market, news, search, fund, kv: overrides.kv, fundamentals: overrides.fundamentals } as unknown as ApiDeps, market, news, search: search as ReturnType<typeof vi.fn>, fund };
 }
 
 const get = (api: (r: Request) => Promise<Response>, path: string, headers: Record<string, string> = {}) =>
@@ -457,5 +457,35 @@ describe('Alarme', () => {
     const api = createApi({ APP_TOKEN: 't' }, deps);
     expect((await get(api, '/api/alerts?s=THYAO.IS')).status).toBe(401);
     expect((await get(api, '/api/alerts?s=THYAO.IS', { authorization: 'Bearer t' })).status).toBe(200);
+  });
+});
+
+describe('Bilanzdaten (Graham)', () => {
+  const sample = { market: 'BIST', source: 'isyatirim', reportingCurrency: 'TRY', years: [], shares: 1, netDebt: 0, equity: 1, dividends: [], dividendCoverageFromYear: null, currentFx: 45, warnings: [] };
+
+  it('/api/fundamentals reicht den Ticker weiter und cacht das Ergebnis', async () => {
+    const getFn = vi.fn(async () => sample);
+    const { deps } = fakeDeps({ fundamentals: { get: getFn } as unknown as ApiDeps['fundamentals'] });
+    const api = createApi({}, deps);
+    const res = await get(api, '/api/fundamentals?s=tuprs.is');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ source: 'isyatirim', currentFx: 45 });
+    await get(api, '/api/fundamentals?s=TUPRS.IS');
+    expect(getFn).toHaveBeenCalledTimes(1);
+    expect(getFn).toHaveBeenCalledWith({ symbol: 'TUPRS', market: 'BIST' });
+  });
+
+  it('prüft den Parameter, verlangt das Token und meldet 503 ohne eingerichteten Dienst', async () => {
+    const { deps } = fakeDeps({ fundamentals: { get: vi.fn(async () => sample) } as unknown as ApiDeps['fundamentals'] });
+    expect((await get(createApi({}, deps), '/api/fundamentals')).status).toBe(400);
+    expect((await get(createApi({}, deps), '/api/fundamentals?s=' + encodeURIComponent('../x'))).status).toBe(400);
+    expect((await get(createApi({ APP_TOKEN: 't' }, deps), '/api/fundamentals?s=AAPL')).status).toBe(401);
+    expect((await get(createApi({}, fakeDeps().deps), '/api/fundamentals?s=AAPL')).status).toBe(503);
+  });
+
+  it('bildet Fehler der Datenquelle ab', async () => {
+    const { deps } = fakeDeps({ fundamentals: { get: vi.fn(async () => { throw new AdapterError('NOT_FOUND', 'weg', 'yahoo'); }) } as unknown as ApiDeps['fundamentals'] });
+    const res = await get(createApi({}, deps), '/api/fundamentals?s=ZZZ');
+    expect(res.status).toBe(404);
   });
 });

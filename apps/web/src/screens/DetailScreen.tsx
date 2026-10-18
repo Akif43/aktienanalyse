@@ -6,6 +6,7 @@ import { AlertsPanel } from '../components/AlertsPanel';
 import { Collapsible } from '../components/Collapsible';
 import { Glance } from '../components/Glance';
 import { Glossary } from '../components/Glossary';
+import { GrahamSection } from '../components/GrahamSection';
 import { HoldingsSection } from '../components/HoldingsSection';
 import { NewsDetail } from '../components/NewsDetail';
 import { NewsList, NewsSummary } from '../components/NewsList';
@@ -180,6 +181,8 @@ function OverviewTab({ ticker, symbol, market, currency, price, name }: { ticker
       {history.isPending && <Spinner label={t('glance.loading')} />}
 
       {isBist && <FxEffect fx={fxPerformance} />}
+
+      <GrahamSection ticker={ticker} market={market} price={price} currency={currency} />
 
       <HoldingsSection instrument={{ kind: 'stock', key: ticker, symbol, market, name }} currentPrice={price ?? null} />
 

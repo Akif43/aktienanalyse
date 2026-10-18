@@ -36,3 +36,5 @@ export const DETAILS_KEY = 'aktien.details.open';
 export const FUNDS_KEY = 'aktien.funds.v1';
 export const PORTFOLIO_KEY = 'aktien.portfolio.v1';
 export const CASH_KEY = 'aktien.portfolio.cash.v1';
+export const GRAHAM_SETTINGS_KEY = 'aktien.graham.settings.v1';
+export const GRAHAM_INPUTS_KEY = 'aktien.graham.inputs.v1';

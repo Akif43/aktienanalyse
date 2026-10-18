@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { GrahamSettingsForm } from '../components/GrahamSettingsForm';
 import { Disclaimer, Segmented } from '../components/ui';
 import { api, ApiError, type HealthResponse } from '../lib/api';
 import { LANG_OPTIONS, setLang, useT } from '../lib/i18n';
@@ -119,6 +120,8 @@ export function SettingsScreen() {
           </div>
         </section>
       )}
+
+      <GrahamSettingsForm />
 
       <section className="group">
         <h3>{t('settings.backupTitle')}</h3>

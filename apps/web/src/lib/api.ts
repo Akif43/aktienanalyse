@@ -1,4 +1,4 @@
-import type { AlertRule, CandleSeries, Envelope, Fund, FundBenchmarkPoint, FundPeriod, FundPricePoint, FundSearchResult, Lang, NewsItemDetail, NewsAnalysis, NewsItem, Quote, SearchResult, TechnicalAnalysis, Timeframe } from '@aktien/core';
+import type { AlertRule, CandleSeries, Fundamentals, Envelope, Fund, FundBenchmarkPoint, FundPeriod, FundPricePoint, FundSearchResult, Lang, NewsItemDetail, NewsAnalysis, NewsItem, Quote, SearchResult, TechnicalAnalysis, Timeframe } from '@aktien/core';
 import { appStorage, TOKEN_KEY } from './storage';
 
 export class ApiError extends Error {
@@ -108,6 +108,7 @@ export const api = {
   fund: (code: string) => apiGet<Fund>('fund', { code }),
   fundHistory: (code: string, period: FundPeriod) => apiGet<FundPricePoint[]>('fund-history', { code, period }),
   fundBenchmark: (code: string, period: FundPeriod) => apiGet<FundBenchmarkPoint[]>('fund-benchmark', { code, period }),
+  fundamentals: (ticker: string) => apiGet<Fundamentals>('fundamentals', { s: ticker }),
   alerts: (ticker: string) => apiGet<{ rules: AlertRule[] }>('alerts', { s: ticker }),
   saveAlerts: (ticker: string, rules: AlertRule[]) => apiPut<{ rules: AlertRule[] }>('alerts', { s: ticker }, { rules }),
 };

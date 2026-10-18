@@ -16,7 +16,8 @@ News/KAP mit Einordnung, Kursanzeige, Depot und Push-Alarme als PWA auf dem iPho
 | 4b | Einfache Ansicht für Laien, Deutsch und Türkisch umschaltbar | erledigt (türkische Texte bitte gegenlesen) |
 | 4c | Türkische Investment-/Rentenfonds (TEFAS): Suche, Merkliste, Kursverlauf, Vergleich | erledigt |
 | 4d | Depot: eigene Käufe (Aktien und Fonds) eintragen, Vermögen und Gewinn/Verlust sehen | erledigt |
-| **5** | **Alarme: Regeln je Aktie, Hintergrund-Überwachung über GitHub Actions, Push über ntfy** | **erledigt (du musst noch ntfy einrichten, siehe unten)** |
+| 5 | Alarme: Regeln je Aktie, Hintergrund-Überwachung über GitHub Actions, Push über ntfy | erledigt (ntfy muss noch eingerichtet werden, siehe unten) |
+| **5b** | **Bewertung nach Benjamin Graham (günstig/fair/teuer) mit nachvollziehbarer Rechnung** | **erledigt** |
 | 6 | Feinschliff, Fehlerbehandlung, Deployment-Anleitung, optional Web Push | offen |
 
 ## Was die App kann
@@ -30,6 +31,7 @@ News/KAP mit Einordnung, Kursanzeige, Depot und Push-Alarme als PWA auf dem iPho
 - **Meldung antippen = Erklärung in der App:** Die KI fasst die Meldung in einfachen Worten zusammen und ordnet ein, was sie für die Aktie bedeuten könnte (kurzfristig, langfristig, was helfen und was belasten könnte, worauf man achten kann), mit Ampel-Einstufung und Angabe, wie gut das belegt ist. **Bei KAP-Meldungen liest die KI den vollständigen Meldungstext** (das offizielle KAP-PDF). **Bei Presseartikeln liegt ihr nur die Überschrift vor**, weil Artikeltexte nicht frei abrufbar sind; die App sagt das ausdrücklich und deckelt die Sicherheit der Einschätzung. Das Original bleibt als Link erreichbar. Abgerufen wird erst beim Antippen, gespeichert je Meldung und Sprache (kostet also pro Meldung höchstens eine KI-Anfrage).
 - **Fonds (TEFAS):** eigener Reiter in der Suche, eigene Merkliste "Meine Fonds" (getrennt von den Aktien), Fonds-Detailseite mit Preis, Tagesänderung, Kategorie, Platz in der Kategorie, Anlegerzahl, Marktanteil, einfachem Kursverlauf (Woche bis 5 Jahre, **umschaltbar TRY/USD/EUR** wie beim Aktienchart, umgerechnet mit dem Tageskurs) und Vergleich mit Gold, BIST 100/30, Inflation (TÜFE), USD, EUR und Bankzins. Quelle ist TEFAS (Tefas.gov.tr), die offizielle Handelsplattform für Investment- und Rentenfonds in der Türkei; der Preis wird einmal täglich nach Börsenschluss aktualisiert, nicht in Echtzeit. Keine KI-Auswertung für Fonds (nur Zahlen aus TEFAS, keine Einschätzung).
 - **Depot:** eigene Käufe von Aktien und Fonds eintragen (Stückzahl, Kaufpreis, Datum, mehrere Käufe je Wert möglich). Übersicht zeigt zuerst das **Gesamtvermögen** (Positionen plus Bargeld), darunter den Wert nur der Positionen, Bargeld, eingesetztes Kapital und Gewinn/Verlust, **umschaltbar in Lira, Dollar oder Euro** (wie beim Kursverlauf), dazu ein **Verlaufschart "Gesamtvermögen im Zeitverlauf"** (aus der gehaltenen Stückzahl je Tag und den historischen Kursen berechnet; Bargeld fließt mit dem aktuellen Betrag über den ganzen Zeitraum ein, da dafür kein Verlauf bekannt ist). Je Position außerdem direkt auf der Aktien-/Fonds-Detailseite unter "Mein Bestand". Rein lokal auf dem Gerät gespeichert (wie die Watchlist), keine Anlageberatung.
+- **Bewertung nach Graham:** Auf jeder Aktien-Detailseite steht eine vereinfachte Bewertung nach Benjamin Graham („Intelligent Investieren“): Einstufung von *Stark unterbewertet* bis *Teuer* (farbiges Label), Kurs im Vergleich zu Kaufgrenze und innerem Wert, Tabelle mit konservativem/Basis-/optimistischem Szenario, Graham-Checkliste (Ja/Nein/unbekannt) und eine aufklappbare **Rechnung Schritt für Schritt**. Die Logik: Bei BIST-Aktien werden Jahresgewinne zum Jahresschnittskurs in US-Dollar umgerechnet, Einmaleffekte bereinigt (Jahresüberschuss > 1,5 × operatives Ergebnis), der Unternehmenstyp bestimmt (zyklisch, Wachstum, stabil), ein normalisiertes Gewinn je Aktie berechnet, daraus über die geforderte Rendite (risikofreier Zins + Aktienrisikoprämie + Länderrisiko + Unternehmensrisiko) das faire KGV, der innere Wert und mit Sicherheitsmarge (30 %, bei hoher Verschuldung 40 %) die Kaufgrenze. Bei Wachstumsunternehmen zusätzlich die Graham-Wachstumsformel und das „eingepreiste Wachstum“. Alle Standardwerte (Zinsen, Prämien, Marge) lassen sich in den Einstellungen ändern, die Bilanzdaten kommen automatisch (Yahoo für US/XETRA, İş Yatırım für BIST, Dividenden und USD/TRY-Jahresschnitt von Yahoo) und lassen sich je Aktie in einer Maske selbst eintragen oder korrigieren (z. B. aus KAP-Berichten). Rechenmodul: `packages/core/src/valuation/graham.ts`. **Grenzen:** Yahoo liefert nur 4 Geschäftsjahre (dann wird mit den vorhandenen Jahren gerechnet und das angezeigt); türkische Abschlüsse sind ab 2023 inflationsbereinigt, die Umrechnung zum Jahresschnittskurs ist deshalb nur eine Näherung; „zyklisch“ hat Vorrang vor „Wachstum“ (sonst würde ein Gewinneinbruch mit Erholung wie bei Tüpraş als Wachstum gelten); für Banken und Versicherungen ungeeignet; keine Anlageberatung.
 - **Alarme:** je Aktie einzeln ein-/ausschaltbar: neues Tagestief, 52-Wochen-Hoch/-Tief, Kurs über/unter einer Schwelle, starke Tagesbewegung (%), wichtige Meldung. Höchstens 3 Alarme am Tag je Regel, nur während die jeweilige Börse geöffnet ist. Ein GitHub-Actions-Job prüft alle 5 Minuten im Hintergrund (`scripts/monitor.ts`, `.github/workflows/monitor.yml`) und schickt Treffer per **ntfy**-Push aufs Handy, unabhängig davon, ob die App gerade offen ist. Regeln und Zustand liegen in Supabase (dieselbe Tabelle wie der KI-Zwischenspeicher), nicht im Browser — Einrichtung siehe unten. Nur für Aktien (Fonds haben keine Tageszeitspanne/52-Wochen-Werte).
 - **Suche** (BIST, XETRA, US, TEFAS-Fonds), **Einstellungen** (Sprache, Zugangscode, Verbindungstest, KI-Status, Liste sichern), **PWA** (installierbar, offlinefähige Hülle).
 
@@ -110,7 +112,7 @@ Voraussetzung: Node.js ≥ 20 (getestet mit 24).
 ```bash
 npm install
 npm run dev          # http://localhost:5173 (App + API in einem Server)
-npm test             # 472 Tests
+npm test             # 569 Tests
 npm run typecheck
 npm run smoke        # Live-Abruf der Datenquellen für ein paar Ticker
 npm run spike        # prüft, ob alle Datenquellen aus der aktuellen Umgebung erreichbar sind
@@ -172,7 +174,7 @@ eine einzige gebündelte Funktion für alle `/api/*`-Routen (der Hobby-Plan erla
 `/api/candles?s=…&tf=1T|1W|1M|6M|1J|5J`, `/api/history?s=…`, `/api/news?s=…&name=…`, `/api/search?q=…`,
 `/api/analysis?s=…&name=…[&lang=de|tr][&refresh=1]`, `/api/news-item?s=…&id=<Meldungs-ID>[&name=…][&lang=de|tr][&refresh=1]` (Erklärung einer einzelnen Meldung), `/api/news-analysis?s=…&name=…[&lang=de|tr][&refresh=1]` (503, solange kein KI-Key gesetzt ist),
 `/api/fund-search?q=…`, `/api/fund?code=AFT`, `/api/fund-history?code=…&period=week|month|3month|6month|ytd|year|3year|5year`, `/api/fund-benchmark?code=…&period=…` (Fonds, TEFAS, keine KI beteiligt),
-`GET/PUT /api/alerts?s=…` (Alarmregeln je Aktie lesen bzw. speichern; einzige Route mit `PUT`, sonst ist alles GET-only; 503, solange kein Supabase eingerichtet ist).
+`/api/fundamentals?s=…` (Bilanzdaten, Dividenden und USD/TRY-Jahresschnitt für die Graham-Bewertung), `GET/PUT /api/alerts?s=…` (Alarmregeln je Aktie lesen bzw. speichern; einzige Route mit `PUT`, sonst ist alles GET-only; 503, solange kein Supabase eingerichtet ist).
 
 **KI-Anbieter** sind austauschbar (`LLMProvider`): Gemini → Groq → Ollama (nur lokal), nur konfigurierte werden genutzt, bei Ausfall springt die Kette weiter.
 Ein Claude-Anbieter lässt sich später als weitere Klasse ergänzen, ohne dass sich Auswertung oder Oberfläche ändern.
@@ -188,6 +190,7 @@ Ein Claude-Anbieter lässt sich später als weitere Klasse ergänzen, ohne dass 
 | Google News RSS | Nachrichten (tr/de/en) | Nur Titel, Link, Quelle, Datum. Die KI ordnet also nur nach Titel ein, nicht nach Volltext. Laut Google nur für persönlichen Gebrauch. |
 | Gemini / Groq | KI-Text | Gratis-Kontingente schwanken und sind teils nur über Drittquellen belegt. |
 | Twelve Data Free | – | **Kein BIST im Gratis-Plan**, daher nicht eingebunden. |
+| Yahoo Fundamentals, İş Yatırım `MaliTablo` | Bilanzdaten für die Graham-Bewertung | Inoffiziell. Yahoo: ohne Key nur 4 Geschäftsjahre; İş Yatırım: bis 8 Jahre in TL, auch bei Unternehmen, die in USD berichten (die App erkennt das am Verhältnis zu Yahoo). Banken fehlen. Zahlen beider Quellen weichen im letzten Jahr um ca. 18 % ab und werden nie gemischt. |
 | TEFAS (`tefas.gov.tr`) | Fondskurse, -kennzahlen, Vergleichswerte | Inoffizielle JSON-API der offiziellen Handelsplattform. Preis nur einmal täglich (nach Börsenschluss), kein Live-Kurs. Das Fondsverzeichnis (ca. 2.600 Fonds) wird serverseitig bis zu 6 Std. zwischengespeichert. |
 
 Für BIST gibt es gratis **keine offizielle Echtzeitquelle**. Die App ist ausschließlich für den privaten Gebrauch gedacht.
@@ -204,7 +207,7 @@ Für BIST gibt es gratis **keine offizielle Echtzeitquelle**. Die App ist aussch
 
 ## Tests
 
-`npm test` (472 Tests) prüft unter anderem:
+`npm test` (569 Tests) prüft unter anderem:
 
 - **Indikatoren gegen unabhängige pandas-Referenzwerte** (Toleranz 1e-7), plus von Hand nachgerechnete Fälle.
 - **Adapter** gegen aufgezeichnete Live-Antworten inklusive Fehlerfälle. **KI-Anbieter** (Gemini, Groq, Ollama) gegen nachgebildete Antworten inklusive Kontingent-, Schema- und Key-Fehlern.
@@ -214,6 +217,7 @@ Für BIST gibt es gratis **keine offizielle Echtzeitquelle**. Die App ist aussch
 - **Zahlen-Wächter:** deutsche, türkische und englische Zahlenformate, Rundung, Datum/Uhrzeit, erfundene Kurse, eingeschleuste Anweisungen.
 - **Auswertungen:** Kandidaten und Handelsplan mit echten THYAO-Daten, Währungsumrechnung, Prüfablauf mit Wiederholung, Zwischenspeicher, Mindestabstand, Tageslimit, Ausfälle.
 - **API und Deployment-Artefakt:** Zugriffsschutz, Fehlerabbildung, Supabase-Anbindung, jede Funktion startet in einem frischen Node-Prozess, `toNodeHandler` reicht Methode/Header/**Body** korrekt an einen echten HTTP-Server durch (nicht nur an den In-Prozess-Handler — ein Body-Weiterleitungs-Fehler wäre bei reinen In-Prozess-Tests unbemerkt geblieben, siehe Alarme unten).
+- **Graham-Bewertung:** jede Rechenstufe mit Grenzfällen (genau 1,5×, 15 %-Wachstum, Variationskoeffizient, 50/100 % Verschuldung), alle fünf Einstufungsgrenzen, Wachstumsformel samt Rückrechnung des eingepreisten Wachstums, Checkliste inkl. „unbekannt“, nicht bewertbare Fälle, die drei Testfälle THY, Tüpraş und Aselsan (Testkurs 45 TL/USD, Einstufung exakt, Gewinn je Aktie mit ±15 % Toleranz gegen die Erwartungswerte; die Aselsan-Reihe enthält eine gekennzeichnete Annahme für 2022), Datenabruf gegen aufgezeichnete Yahoo-/İş-Yatırım-Antworten (USD-Berichter-Erkennung, Ersatzquelle, nie gemischte Quellen), Zusammenführung automatischer und eigener Werte.
 - **Alarme:** alle 5 Regeltypen (Feuern und Hysterese-Rückstellung), Tageszähler-Grenze und -Reset an einem neuen Börsentag, "Börse geschlossen" sperrt jede Regel, News-Dedup über gesehene IDs, `/api/alerts` (GET/PUT, Validierung, Ticker-Trennung, 503 ohne Supabase, weiterhin 405 für andere Methoden), `NtfyNotifier` gegen einen Fake-`fetch`.
 
 Mutationstests bestätigen, dass die Tests echte Fehler finden (z. B. Wächter ohne Satzentfernung, ignoriertes Tageslimit, Stop über Einstieg).

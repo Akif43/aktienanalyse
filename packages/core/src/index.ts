@@ -26,7 +26,11 @@ export * from './adapters/news/service';
 export * from './adapters/fund/types';
 export * from './adapters/fund/tefas';
 
+export * from './adapters/fundamentals';
+
 export * from './watchlist/watchlist';
+
+export * from './valuation';
 
 export * from './alerts/types';
 export * from './alerts/engine';

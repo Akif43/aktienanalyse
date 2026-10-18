@@ -1,0 +1,89 @@
+{
+ "ok": true,
+ "errorCode": null,
+ "errorDescription": null,
+ "transactionId": "7392903f60224e42893753ee7042778b",
+ "value": [
+  {
+   "itemCode": "1AA",
+   "itemDescTr": "  Nakit ve Nakit Benzerleri",
+   "itemDescEng": "Cash and Cash Equivalents",
+   "value1": "101313500671",
+   "value2": "125646164246",
+   "value3": "20115000000",
+   "value4": "76192000000"
+  },
+  {
+   "itemCode": "1AB",
+   "itemDescTr": "  Finansal Yatırımlar",
+   "itemDescEng": "Short-Term Financial Investments",
+   "value1": "215182409539",
+   "value2": "154492215663",
+   "value3": "157311000000",
+   "value4": "11705000000"
+  },
+  {
+   "itemCode": "2AA",
+   "itemDescTr": "  Finansal Borçlar",
+   "itemDescEng": "Short-Term Financial Loans",
+   "value1": "191282150230",
+   "value2": "170696685967",
+   "value3": "109810000000",
+   "value4": "70184000000"
+  },
+  {
+   "itemCode": "2BA",
+   "itemDescTr": "  Finansal Borçlar",
+   "itemDescEng": "Long-Term Financial Loans",
+   "value1": "708690498442",
+   "value2": "470595880752",
+   "value3": "310362000000",
+   "value4": "192799000000"
+  },
+  {
+   "itemCode": "2O",
+   "itemDescTr": "  Ana Ortaklığa Ait Özkaynaklar",
+   "itemDescEng": "Parent Shareholders Capital",
+   "value1": "1073041096166",
+   "value2": "889919927396",
+   "value3": "457257000000",
+   "value4": "181422000000"
+  },
+  {
+   "itemCode": "2OA",
+   "itemDescTr": "  Ödenmiş Sermaye",
+   "itemDescEng": "Share Capital",
+   "value1": "1380000000",
+   "value2": "1380000000",
+   "value3": "1380000000",
+   "value4": "1380000000"
+  },
+  {
+   "itemCode": "3DF",
+   "itemDescTr": "FAALİYET KARI (ZARARI)",
+   "itemDescEng": "OPERATING PROFITS",
+   "value1": "106134532481",
+   "value2": "105228269879",
+   "value3": "71425000000",
+   "value4": "48811000000"
+  },
+  {
+   "itemCode": "3L",
+   "itemDescTr": "DÖNEM KARI (ZARARI)",
+   "itemDescEng": "NET PROFIT AFTER TAXES",
+   "value1": "139092773392",
+   "value2": "148375617139",
+   "value3": "162998000000",
+   "value4": "47432000000"
+  },
+  {
+   "itemCode": "3Z",
+   "itemDescTr": "Ana Ortaklık Payları",
+   "itemDescEng": "Parent Shares",
+   "value1": "139199933601",
+   "value2": "148403104528",
+   "value3": "163003000000",
+   "value4": "47429000000"
+  }
+ ]
+}

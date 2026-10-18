@@ -237,6 +237,11 @@ export function usePortfolioHistory(positions: readonly PortfolioPosition[]) {
   return { priceHistory, fx: { USD: fxUsd.data?.candles ?? [], EUR: fxEur.data?.candles ?? [] }, isPending };
 }
 
+/** Bilanzdaten für die Graham-Bewertung. Jahresabschlüsse ändern sich selten: lange gültig, kein Polling. */
+export function useFundamentals(ticker: string, enabled = true) {
+  return useQuery({ queryKey: ['fundamentals', ticker], queryFn: () => api.fundamentals(ticker), staleTime: 6 * 60 * 60_000, retry: 1, refetchOnWindowFocus: false, enabled });
+}
+
 // --- Alarme -----------------------------------------------------------------------------------
 
 export function useAlerts(ticker: string) {
