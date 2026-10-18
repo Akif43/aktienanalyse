@@ -6,6 +6,8 @@ import type { Instrument } from '../../types';
 
 const ID = 'yahoo-fundamentals';
 const HOSTS = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com'];
+/** Erstes Jahr mit vergleichbaren USD/TRY-Kursen (Umstellung auf die neue Lira am 1.1.2005). */
+const FX_MIN_YEAR = 2005;
 const HEADERS = { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' };
 
 const STATEMENT_TYPES = ['annualNetIncome', 'annualOperatingIncome', 'annualTotalDebt', 'annualCashAndCashEquivalents', 'annualStockholdersEquity', 'annualOrdinarySharesNumber'] as const;
@@ -107,9 +109,9 @@ export class YahooFundamentals {
     return { dividends: [...byYear.entries()].sort((a, b) => a[0] - b[0]).map(([year, amount]) => ({ year, amount })), coverageFromYear };
   }
 
-  /** Jahresdurchschnitt (Mittel der Tagesschlusskurse) Lira je USD und der aktuelle Kurs. */
+  /** Jahresdurchschnitt (Mittel der Wochenschlusskurse seit 2005) Lira je USD und der aktuelle Kurs. */
   async getUsdTry(): Promise<YahooUsdTry> {
-    const body = await this.getJson('/v8/finance/chart/USDTRY%3DX?range=10y&interval=1d', 'USDTRY=X');
+    const body = await this.getJson('/v8/finance/chart/USDTRY%3DX?range=max&interval=1wk', 'USDTRY=X');
     const parsed = fxChartSchema.safeParse(body);
     const result = parsed.success ? parsed.data.chart.result?.[0] : undefined;
     const closes = result?.indicators.quote[0]?.close;
@@ -122,6 +124,7 @@ export class YahooFundamentals {
       if (c === null || c === undefined || !(c > 0)) return;
       lastClose = c;
       const year = new Date(t * 1000).getUTCFullYear();
+      if (year < FX_MIN_YEAR) return; // vor der Lira-Umstellung 2005 sind die Kurse in anderen Größenordnungen
       const s = sums.get(year) ?? { sum: 0, n: 0 };
       s.sum += c;
       s.n += 1;

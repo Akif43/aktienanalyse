@@ -45,6 +45,8 @@ export interface ApiEnv extends LlmEnv {
   AI_DAILY_LIMIT?: string;
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_KEY?: string;
+  /** Kontaktadresse für den User-Agent der SEC (EDGAR verlangt sie). Ohne sie bleiben US-Aktien bei 4 Jahren Gewinnhistorie. */
+  SEC_CONTACT?: string;
 }
 
 export interface AiInfo {
@@ -140,7 +142,7 @@ export function createDeps(env: ApiEnv): ApiDeps {
     analysis: new AnalysisService({ llm, kv, market: new CachingMarket(market, cache), news, kapText: (item) => fetchKapDocumentText(item), dailyLimit: Number.isFinite(limit) && limit > 0 ? limit : undefined }),
     aiInfo: { configured: llm !== null, providers, storage: persistent ? 'supabase' : 'memory' },
     kv,
-    fundamentals: new FundamentalsService(),
+    fundamentals: new FundamentalsService({ kv, secContact: env.SEC_CONTACT }),
   };
 }
 

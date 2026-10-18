@@ -152,7 +152,7 @@ describe('Testfall Aselsan (ASELS): Wachstum, eingepreistes Wachstum über 25 %'
     expect(r.hasLossYear).toBe(false);
     expect(r.type).toBe('growth');
     expect(r.notes).toContainEqual({ code: 'ias29' });
-    expect(r.notes).toContainEqual({ code: 'fewYears', years: 4 });
+    expect(r.notes).toContainEqual({ code: 'fewYears', years: 4, window: 10 });
   });
 
   it('EPS = Gewinn des letzten Jahres (USD) × aktueller Kurs ÷ Aktien ≈ 7,4 TL (berichtet: 6,57)', () => {
@@ -216,15 +216,31 @@ describe('Schritt 3: Unternehmenstyp', () => {
     const r = ok(computeGraham(input({ years: years([1, 1.5, 2.2], 2023) })));
     expect(r.growthRates).toHaveLength(2);
     expect(r.notes).toContainEqual({ code: 'fewGrowthRates', rates: 2 });
-    expect(r.notes).toContainEqual({ code: 'fewYears', years: 3 });
+    expect(r.notes).toContainEqual({ code: 'fewYears', years: 3, window: 10 });
   });
 });
 
 describe('Schritt 4: normalisiertes EPS', () => {
-  it('stabil/zyklisch: Durchschnitt der letzten 5 Jahre, auch wenn mehr Jahre geliefert werden', () => {
+  it('stabil/zyklisch: Durchschnitt aller gelieferten Jahre bis zu 10, ältere zählen nicht', () => {
+    const r = ok(computeGraham(input({ years: years([100, 100, 1, 2, 3, 2, 2, 2, 2, 2, 2, 2], 2014), shares: 1 * B })));
+    expect(r.yearsUsed).toBe(10);
+    expect(r.years).toHaveLength(12);
+    expect(r.normalizedEarnings).toBeCloseTo(((1 + 2 + 3 + 2 * 7) / 10) * B);
+  });
+  it('mit 7 gelieferten Jahren zählen alle 7 und es gibt einen Hinweis "nur 7 von 10"', () => {
     const r = ok(computeGraham(input({ years: years([100, 100, 1, 2, 3, 2, 2], 2019), shares: 1 * B })));
-    expect(r.yearsUsed).toBe(5);
-    expect(r.normalizedEarnings).toBeCloseTo(2 * B);
+    expect(r.yearsUsed).toBe(7);
+    expect(r.notes).toContainEqual({ code: 'fewYears', years: 7, window: 10 });
+  });
+  it('mit 10 Jahren kein Hinweis auf zu wenig Jahre', () => {
+    const r = ok(computeGraham(input({ years: years(Array(10).fill(1), 2016) })));
+    expect(r.notes.some((n) => n.code === 'fewYears')).toBe(false);
+  });
+  it('Kapitalerhöhung: gleiche Gesamtgewinne, doppelte Aktienzahl → halbes EPS (Historie wird nicht verfälscht)', () => {
+    const base = ok(computeGraham(input({ years: years([1, 1, 1, 1, 1], 2021), shares: 1 * B })));
+    const split = ok(computeGraham(input({ years: years([1, 1, 1, 1, 1], 2021), shares: 2 * B })));
+    expect(split.normalizedEarnings).toBeCloseTo(base.normalizedEarnings);
+    expect(split.eps).toBeCloseTo(base.eps / 2);
   });
   it('Wachstum: Gewinn des letzten Jahres', () => {
     const r = ok(computeGraham(input({ years: years([1, 1.2, 1.5, 1.9, 2.4], 2021) })));
@@ -242,6 +258,74 @@ describe('Schritt 4: normalisiertes EPS', () => {
     const r = ok(computeGraham(input({ market: 'BIST', reportingCurrency: 'TRY', years: ys, currentFx: 100, shares: 1 * B })));
     expect(r.years.map((y) => y.base)).toEqual([1 * B, 1 * B, 1 * B]); // TL-Inflation herausgerechnet
     expect(r.eps).toBeCloseTo(100); // 1 Mrd. USD × 100 TL/USD ÷ 1 Mrd. Aktien
+  });
+});
+
+describe('Zyklus-Abschlag (Fallback)', () => {
+  const cyc = (values: number[], settings = DEFAULT_GRAHAM_SETTINGS) => ok(computeGraham(input({ years: years(values, 2021), shares: 1 * B }), settings));
+
+  it('zyklisch ohne schwaches Jahr: Abschlag wird angewendet', () => {
+    // Rückgang −52 % (3 → 1,44) löst zyklisch aus; Durchschnitt (3+1,44+2,6+2,8+3)/5 = 2,568, Minimum 1,44 > 50 % davon (1,284)
+    const r = cyc([3, 1.44, 2.6, 2.8, 3]);
+    expect(r.type).toBe('cyclical');
+    expect(r.weakYears).toEqual([]);
+    expect(r.cyclicalDiscountApplied).toBe(true);
+    expect(r.epsBeforeDiscount).toBeCloseTo(2.568, 3);
+    expect(r.eps).toBeCloseTo(2.568 * 0.85, 3);
+    expect(r.notes).toContainEqual({ code: 'cyclicalDiscount', percent: 15 });
+  });
+
+  it('zyklisch mit schwachem Jahr (< 50 % des Durchschnitts): kein Abschlag', () => {
+    const r = cyc([3, 0.6, 2.6, 2.8, 3]); // Durchschnitt 2,4, 0,6 < 1,2
+    expect(r.type).toBe('cyclical');
+    expect(r.weakYears).toEqual([2022]);
+    expect(r.cyclicalDiscountApplied).toBe(false);
+    expect(r.eps).toBeCloseTo(r.epsBeforeDiscount);
+    expect(r.notes.some((n) => n.code === 'cyclicalDiscount')).toBe(false);
+  });
+
+  it('genau 50 % des Durchschnitts ist noch kein schwaches Jahr, knapp darunter schon', () => {
+    const exact = cyc([1, 1, 4, 1, 3]); // Mittel 2, Minimum 1 = genau 50 %
+    expect(exact.type).toBe('cyclical');
+    expect(exact.weakYears).toEqual([]);
+    expect(exact.cyclicalDiscountApplied).toBe(true);
+    const below = cyc([0.99, 1, 4, 1, 3]);
+    expect(below.weakYears).toEqual([2021]);
+    expect(below.cyclicalDiscountApplied).toBe(false);
+  });
+
+  it('stabile und Wachstumsfirmen bekommen nie einen Abschlag', () => {
+    const stable = cyc([1, 1.05, 1, 1.02, 1.04]);
+    expect(stable.type).toBe('stable');
+    expect(stable.cyclicalDiscountApplied).toBe(false);
+    expect(stable.eps).toBeCloseTo(stable.epsBeforeDiscount);
+    const growth = cyc([1, 1.2, 1.5, 1.9, 2.4]);
+    expect(growth.type).toBe('growth');
+    expect(growth.cyclicalDiscountApplied).toBe(false);
+  });
+
+  it('die Einstellung wirkt: 30 % Abschlag, 0 % schaltet ihn aus (kein Hinweis)', () => {
+    const r30 = cyc([3, 1.44, 2.6, 2.8, 3], { ...DEFAULT_GRAHAM_SETTINGS, cyclicalDiscount: 30 });
+    expect(r30.eps).toBeCloseTo(2.568 * 0.7, 3);
+    expect(r30.notes).toContainEqual({ code: 'cyclicalDiscount', percent: 30 });
+    const r0 = cyc([3, 1.44, 2.6, 2.8, 3], { ...DEFAULT_GRAHAM_SETTINGS, cyclicalDiscount: 0 });
+    expect(r0.cyclicalDiscountApplied).toBe(false);
+    expect(r0.eps).toBeCloseTo(2.568, 3);
+  });
+
+  it('der Abschlag senkt die Bewertung (Kaufgrenze) und der +1 %-Risikoaufschlag bleibt zusätzlich', () => {
+    const withDiscount = cyc([3, 1.44, 2.6, 2.8, 3]);
+    const without = cyc([3, 1.44, 2.6, 2.8, 3], { ...DEFAULT_GRAHAM_SETTINGS, cyclicalDiscount: 0 });
+    expect(withDiscount.companyRisk).toBe(1);
+    expect(withDiscount.scenarios.base.intrinsicValue).toBeCloseTo(without.scenarios.base.intrinsicValue * 0.85);
+  });
+
+  it('ein schwaches Jahr weiter zurück im 10-Jahres-Fenster verhindert den Abschlag (längerer Zeitraum deckt den Zyklus ab)', () => {
+    // 5 Jahre ohne schwaches Jahr, aber 5 Jahre früher gab es einen Einbruch → Abschlag entfällt
+    const longRun = cyc([0.4, 2.6, 2.8, 3, 3, 3, 1.44, 2.6, 2.8, 3]);
+    expect(longRun.yearsUsed).toBe(10);
+    expect(longRun.weakYears).toEqual([2021]);
+    expect(longRun.cyclicalDiscountApplied).toBe(false);
   });
 });
 
@@ -390,6 +474,6 @@ describe('Graham-Checkliste', () => {
   it('kein Verlustjahr: prüft die unbereinigten Jahresüberschüsse der letzten 5 Jahre', () => {
     expect(run({ years: years([1, 1, 1, 1, 1], 2021) }).noLossYear.ok).toBe(true);
     expect(run({ years: years([1, 1, -0.1, 1, 1], 2021) }).noLossYear.ok).toBe(false);
-    expect(run({ years: years([-5, 1, 1, 1, 1, 1], 2020) }).noLossYear.ok).toBe(true); // Verlust liegt vor dem 5-Jahres-Fenster
+    expect(run({ years: years([-0.5, 1, 1, 1, 1, 1], 2020) }).noLossYear.ok).toBe(true); // Verlust liegt vor dem 5-Jahres-Fenster
   });
 });

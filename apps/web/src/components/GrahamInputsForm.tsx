@@ -1,11 +1,18 @@
 import type { Fundamentals, GrahamReportingCurrency, Market } from '@aktien/core';
 import { useState } from 'react';
+import { overlayYears } from '../lib/graham-input';
 import { grahamInputsStore, type GrahamManual, type GrahamManualYear } from '../lib/graham-store';
 import { useT } from '../lib/i18n';
 import { Segmented } from './ui';
 
 interface YearRow {
   id: number;
+  /** Vom Nutzer in dieser Maske hinzugefügt (Jahr noch änderbar). */
+  isNew: boolean;
+  /** Schon gespeicherter eigener Wert dieses Jahres (bleibt unverändert erhalten, solange die Felder nicht geändert werden). */
+  saved: GrahamManualYear | null;
+  /** Ausgangswerte der Felder, um geänderte Zeilen zu erkennen. */
+  initial: { netIncome: string; ebit: string; avgFx: string } | null;
   year: string;
   netIncome: string;
   ebit: string;
@@ -38,29 +45,41 @@ function parseDividends(raw: string): { year: number; amount: number }[] | 'bad'
 
 /**
  * Eigene Werte zu einer Aktie. Vorbefüllt mit den aktuell gültigen Werten (eigene oder automatische). Beträge in
- * Millionen. Eine hier gespeicherte Jahresreihe ersetzt die automatische komplett.
+ * Millionen. Gespeichert werden nur geänderte und neu hinzugefügte Jahre: Sie überlagern die automatische Reihe für
+ * dieses Jahr, alle anderen Jahre bleiben automatisch (und bekommen spätere Aktualisierungen).
  */
 export function GrahamInputsForm({ ticker, market, auto, manual, onReset }: { ticker: string; market: Market; auto: Fundamentals | undefined; manual: GrahamManual | undefined; onReset: () => void }) {
   const { t } = useT();
   const isBist = market === 'BIST';
-  const avgUsdTry = auto?.avgUsdTry ?? {};
-  const sourceYears = manual?.years ?? auto?.years ?? [];
+  const effectiveYears = overlayYears(auto, manual);
 
   const [rows, setRows] = useState<YearRow[]>(() =>
-    sourceYears.map((y, i) => ({ id: i, year: String(y.year), netIncome: fmt(y.netIncome, MILLION), ebit: fmt(y.ebit, MILLION), avgFx: fmt(y.avgFx ?? avgUsdTry[y.year] ?? null) })),
+    effectiveYears.map((y, i) => {
+      const initial = { netIncome: fmt(y.netIncome, MILLION), ebit: fmt(y.ebit, MILLION), avgFx: fmt(y.avgFx) };
+      return { id: i, isNew: false, saved: manual?.years?.find((m) => m.year === y.year) ?? null, initial, year: String(y.year), ...initial };
+    }),
   );
-  const [nextId, setNextId] = useState(sourceYears.length);
-  const [currency, setCurrency] = useState<GrahamReportingCurrency>(manual?.reportingCurrency ?? auto?.reportingCurrency ?? 'TRY');
-  const [shares, setShares] = useState(fmt(manual?.shares ?? auto?.shares, MILLION));
-  const [netDebt, setNetDebt] = useState(fmt(manual?.netDebt ?? auto?.netDebt, MILLION));
-  const [currentFx, setCurrentFx] = useState(fmt(manual?.currentFx ?? auto?.currentFx));
-  const [ttmEps, setTtmEps] = useState(fmt(manual?.ttmEps));
-  const [dividends, setDividends] = useState((manual?.dividendYears ?? auto?.dividends ?? []).map((d) => `${d.year}=${fmt(d.amount)}`).join('; '));
+  const [nextId, setNextId] = useState(effectiveYears.length);
+  // Ausgangswerte der Einzelfelder: nur was davon abweicht (oder schon eigen war), wird als eigener Wert gespeichert.
+  const init = {
+    currency: manual?.reportingCurrency ?? auto?.reportingCurrency ?? ('TRY' as GrahamReportingCurrency),
+    shares: fmt(manual?.shares ?? auto?.shares, MILLION),
+    netDebt: fmt(manual?.netDebt ?? auto?.netDebt, MILLION),
+    currentFx: fmt(manual?.currentFx ?? auto?.currentFx),
+    ttmEps: fmt(manual?.ttmEps),
+    dividends: (manual?.dividendYears ?? auto?.dividends ?? []).map((d) => `${d.year}=${fmt(d.amount)}`).join('; '),
+  };
+  const [currency, setCurrency] = useState<GrahamReportingCurrency>(init.currency);
+  const [shares, setShares] = useState(init.shares);
+  const [netDebt, setNetDebt] = useState(init.netDebt);
+  const [currentFx, setCurrentFx] = useState(init.currentFx);
+  const [ttmEps, setTtmEps] = useState(init.ttmEps);
+  const [dividends, setDividends] = useState(init.dividends);
   const [error, setError] = useState(false);
 
   const setRow = (id: number, patch: Partial<YearRow>) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   const addRow = () => {
-    setRows((rs) => [...rs, { id: nextId, year: '', netIncome: '', ebit: '', avgFx: '' }]);
+    setRows((rs) => [{ id: nextId, isNew: true, saved: null, initial: null, year: '', netIncome: '', ebit: '', avgFx: '' }, ...rs]);
     setNextId((n) => n + 1);
   };
 
@@ -68,6 +87,12 @@ export function GrahamInputsForm({ ticker, market, auto, manual, onReset }: { ti
     const years: GrahamManualYear[] = [];
     let bad = false;
     for (const r of rows) {
+      const unchanged = r.initial !== null && r.netIncome === r.initial.netIncome && r.ebit === r.initial.ebit && r.avgFx === r.initial.avgFx;
+      if (unchanged) {
+        // Unveränderte automatische Jahre bleiben automatisch; schon gespeicherte eigene Jahre behalten ihre genauen Werte.
+        if (r.saved) years.push(r.saved);
+        continue;
+      }
       const year = parseNumber(r.year);
       const income = parseNumber(r.netIncome);
       const ebit = parseNumber(r.ebit);
@@ -75,6 +100,7 @@ export function GrahamInputsForm({ ticker, market, auto, manual, onReset }: { ti
       if (year === 'bad' || income === 'bad' || ebit === 'bad' || fx === 'bad') bad = true;
       if (typeof year === 'number' && typeof income === 'number') years.push({ year, netIncome: income * MILLION, ebit: typeof ebit === 'number' ? ebit * MILLION : null, avgFx: typeof fx === 'number' && fx > 0 ? fx : null });
     }
+    if (new Set(years.map((y) => y.year)).size !== years.length) bad = true; // dasselbe Jahr doppelt
     const sh = parseNumber(shares);
     const nd = parseNumber(netDebt);
     const fx = parseNumber(currentFx);
@@ -87,12 +113,17 @@ export function GrahamInputsForm({ ticker, market, auto, manual, onReset }: { ti
     setError(false);
     const next: GrahamManual = {};
     if (years.length > 0) next.years = years;
-    if (typeof sh === 'number') next.shares = sh * MILLION;
-    if (typeof nd === 'number') next.netDebt = nd * MILLION;
-    if (isBist) next.reportingCurrency = currency;
-    if (isBist && typeof fx === 'number') next.currentFx = fx;
-    if (typeof eps === 'number') next.ttmEps = eps;
-    if (div.length > 0) next.dividendYears = div;
+    // Unveränderte Felder bleiben automatisch (und aktuell); schon gespeicherte eigene Werte behalten ihre genauen Zahlen.
+    if (shares !== init.shares && typeof sh === 'number') next.shares = sh * MILLION;
+    else if (manual?.shares !== undefined && shares === init.shares) next.shares = manual.shares;
+    if (netDebt !== init.netDebt && typeof nd === 'number') next.netDebt = nd * MILLION;
+    else if (manual?.netDebt !== undefined && netDebt === init.netDebt) next.netDebt = manual.netDebt;
+    if (isBist && (currency !== init.currency || manual?.reportingCurrency !== undefined)) next.reportingCurrency = currency;
+    if (isBist && currentFx !== init.currentFx && typeof fx === 'number') next.currentFx = fx;
+    else if (isBist && manual?.currentFx !== undefined && currentFx === init.currentFx) next.currentFx = manual.currentFx;
+    if (typeof eps === 'number') next.ttmEps = ttmEps === init.ttmEps && manual?.ttmEps !== undefined ? manual.ttmEps : eps;
+    if (dividends !== init.dividends && div.length > 0) next.dividendYears = div;
+    else if (manual?.dividendYears !== undefined && dividends === init.dividends) next.dividendYears = manual.dividendYears;
     grahamInputsStore.set(ticker, next);
   };
 
@@ -124,13 +155,17 @@ export function GrahamInputsForm({ ticker, market, auto, manual, onReset }: { ti
       </div>
       {rows.map((r) => (
         <div className="graham-year-row" key={r.id}>
-          <input className="search-input" inputMode="numeric" type="text" value={r.year} aria-label={t('graham.form.year')} onChange={(e) => setRow(r.id, { year: e.target.value })} />
+          <input className="search-input" inputMode="numeric" type="text" value={r.year} readOnly={!r.isNew} aria-label={t('graham.form.year')} onChange={(e) => setRow(r.id, { year: e.target.value })} />
           <input className="search-input" inputMode="decimal" type="text" value={r.netIncome} aria-label={t('graham.form.netIncome')} onChange={(e) => setRow(r.id, { netIncome: e.target.value })} />
           <input className="search-input" inputMode="decimal" type="text" value={r.ebit} aria-label={t('graham.form.ebit')} onChange={(e) => setRow(r.id, { ebit: e.target.value })} />
           {isBist && <input className="search-input" inputMode="decimal" type="text" value={r.avgFx} aria-label={t('graham.form.avgFx')} onChange={(e) => setRow(r.id, { avgFx: e.target.value })} />}
-          <button type="button" className="delete-btn" aria-label={t('graham.form.removeYear', { year: r.year })} onClick={() => setRows((rs) => rs.filter((x) => x.id !== r.id))}>
-            −
-          </button>
+          {r.isNew || r.saved ? (
+            <button type="button" className="delete-btn" aria-label={t('graham.form.removeYear', { year: r.year })} onClick={() => setRows((rs) => rs.filter((x) => x.id !== r.id))}>
+              −
+            </button>
+          ) : (
+            <span />
+          )}
         </div>
       ))}
       <div className="stack">

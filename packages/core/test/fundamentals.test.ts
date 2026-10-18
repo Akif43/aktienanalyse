@@ -95,10 +95,30 @@ describe('YahooFundamentals', () => {
   it('mittelt USD/TRY je Kalenderjahr (ohne fehlende Kurse) und liefert den aktuellen Kurs', async () => {
     const m = mockFetch(json(fxChart));
     const fx = await new YahooFundamentals({ fetch: m.fetch, sleep: m.sleep }).getUsdTry();
-    expect(m.calls[0]!.url).toContain('USDTRY%3DX?range=10y&interval=1d');
+    expect(m.calls[0]!.url).toContain('USDTRY%3DX?range=max&interval=1wk');
     expect(fx.avgByYear[2024]).toBeCloseTo(30);
     expect(fx.avgByYear[2025]).toBeCloseTo(40);
     expect(fx.current).toBe(45);
+  });
+
+  it('verwirft Kurse vor der Lira-Umstellung 2005 (andere Größenordnung) und reicht bis 2005 zurück', async () => {
+    const body = {
+      chart: {
+        result: [
+          {
+            meta: { regularMarketPrice: 45 },
+            timestamp: [ts('2003-03-01'), ts('2005-03-01'), ts('2005-09-01'), ts('2025-03-01')],
+            indicators: { quote: [{ close: [1_400_000, 1.3, 1.4, 40] }] },
+          },
+        ],
+        error: null,
+      },
+    };
+    const m = mockFetch(json(body));
+    const fx = await new YahooFundamentals({ fetch: m.fetch, sleep: m.sleep }).getUsdTry();
+    expect(fx.avgByYear[2003]).toBeUndefined();
+    expect(fx.avgByYear[2005]).toBeCloseTo(1.35);
+    expect(fx.avgByYear[2025]).toBe(40);
   });
 });
 
@@ -109,15 +129,33 @@ describe('IsYatirimFundamentals', () => {
     const m = mockFetch(tuprs());
     const s = await new IsYatirimFundamentals({ fetch: m.fetch, sleep: m.sleep }).getStatements('TUPRS', 2025);
 
-    expect(m.calls).toHaveLength(2); // zwei Blöcke à 4 Jahre
+    expect(m.calls).toHaveLength(3); // drei Blöcke à 4 Jahre
     expect(m.calls[0]!.url).toContain('companyCode=TUPRS');
     expect(m.calls[0]!.url).toContain('year1=2025&period1=12&year2=2024');
     expect(m.calls[1]!.url).toContain('year1=2021&period1=12');
-    expect(s.years.map((y) => y.year)).toEqual([2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]);
-    expect(s.years[7]).toEqual({ year: 2025, netIncome: 34_766_048_942, operatingProfit: 49_042_749_197 });
+    expect(m.calls[2]!.url).toContain('year1=2017&period1=12');
+    // (alle drei Antworten sind derselbe aufgezeichnete Block, daher sind die Jahreszahlen nur Beschriftung)
+    expect(s.years.map((y) => y.year)).toEqual([2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]);
+    expect(s.years[11]).toEqual({ year: 2025, netIncome: 34_766_048_942, operatingProfit: 49_042_749_197 });
     expect(s.shares).toBe(1_926_796_000);
     expect(s.netDebt).toBe(25_695_734_494 + 33_477_290_812 - 126_280_900_199 - 41_215);
     expect(s.equity).toBe(428_757_719_763);
+  });
+
+  it('nur der jüngste Block, wenn ältere Jahre schon gespeichert sind (blocks = 1)', async () => {
+    const m = mockFetch(tuprs());
+    const s = await new IsYatirimFundamentals({ fetch: m.fetch, sleep: m.sleep }).getStatements('TUPRS', 2025, 1);
+    expect(m.calls).toHaveLength(1);
+    expect(s.years.map((y) => y.year)).toEqual([2022, 2023, 2024, 2025]);
+    expect(s.shares).toBe(1_926_796_000);
+  });
+
+  it('ein Block ohne veröffentlichte Jahre beendet das Nachladen (kein vierter Aufruf)', async () => {
+    const emptyYears = { ok: true, value: [{ itemCode: '3Z', value1: null, value2: '', value3: null, value4: null }, { itemCode: '2OA', value1: null, value2: '', value3: null, value4: null }] };
+    const m = mockFetch(tuprs(), json(emptyYears), tuprs());
+    const s = await new IsYatirimFundamentals({ fetch: m.fetch, sleep: m.sleep }).getStatements('TUPRS', 2025);
+    expect(m.calls).toHaveLength(2);
+    expect(s.years.map((y) => y.year)).toEqual([2022, 2023, 2024, 2025]);
   });
 
   it('scheitert der ältere Block, bleiben die 4 jüngeren Jahre', async () => {
@@ -170,7 +208,7 @@ describe('FundamentalsService', () => {
 
     expect(f.source).toBe('isyatirim');
     expect(f.reportingCurrency).toBe('TRY');
-    expect(f.years).toHaveLength(8);
+    expect(f.years).toHaveLength(12);
     expect(f.years.at(-1)).toMatchObject({ year: 2025, netIncome: 34_766_048_942, ebit: 49_042_749_197, avgFx: 40 });
     expect(f.years.find((y) => y.year === 2024)!.avgFx).toBeCloseTo(30);
     expect(f.shares).toBe(1_926_796_000);

@@ -42,6 +42,24 @@ describe('GrahamSettingsStore', () => {
     expect(messy).toEqual({ ...DEFAULT_GRAHAM_SETTINGS, countryRiskBist: 4, safetyMarginHighDebt: 45 });
   });
 
+  it('Zyklus-Abschlag: Standard 15 %, gültig von 0 bis 50 %, darüber oder darunter fällt auf den Standard zurück', () => {
+    expect(DEFAULT_GRAHAM_SETTINGS.cyclicalDiscount).toBe(15);
+    expect(sanitizeGrahamSettings({}).cyclicalDiscount).toBe(15);
+    expect(sanitizeGrahamSettings({ cyclicalDiscount: 0 }).cyclicalDiscount).toBe(0);
+    expect(sanitizeGrahamSettings({ cyclicalDiscount: 50 }).cyclicalDiscount).toBe(50);
+    expect(sanitizeGrahamSettings({ cyclicalDiscount: 51 }).cyclicalDiscount).toBe(15);
+    expect(sanitizeGrahamSettings({ cyclicalDiscount: -1 }).cyclicalDiscount).toBe(15);
+    expect(sanitizeGrahamSettings({ cyclicalDiscount: 'x' }).cyclicalDiscount).toBe(15);
+  });
+
+  it('Zyklus-Abschlag bleibt dauerhaft gespeichert; ältere Speicherstände ohne das Feld bekommen den Standard', () => {
+    const storage = fakeStorage();
+    new GrahamSettingsStore(storage).set({ ...DEFAULT_GRAHAM_SETTINGS, cyclicalDiscount: 25 });
+    expect(new GrahamSettingsStore(storage).getSnapshot().cyclicalDiscount).toBe(25);
+    const old = fakeStorage({ 'aktien.graham.settings.v1': JSON.stringify({ riskFreeRate: 3 }) });
+    expect(new GrahamSettingsStore(old).getSnapshot()).toEqual({ ...DEFAULT_GRAHAM_SETTINGS, riskFreeRate: 3 });
+  });
+
   it('übersteht kaputten Speicher und Speicherfehler', () => {
     expect(new GrahamSettingsStore(fakeStorage({ 'aktien.graham.settings.v1': '{kein json' })).getSnapshot()).toEqual(DEFAULT_GRAHAM_SETTINGS);
     const broken: StorageLike = { getItem: () => null, setItem: () => { throw new Error('Quota'); }, removeItem: () => {} };
@@ -81,6 +99,14 @@ describe('GrahamInputsStore', () => {
     expect(s.getSnapshot()).not.toBe(before);
     s.clear('GIBTS-NICHT');
     expect(calls).toBe(1);
+  });
+
+  it('speichert auch ältere Jahre dauerhaft (bis zu 30 eigene Jahre)', () => {
+    const storage = fakeStorage();
+    const s = new GrahamInputsStore(storage);
+    const years = Array.from({ length: 25 }, (_, i) => ({ year: 2000 + i, netIncome: i + 1, ebit: null, avgFx: null }));
+    s.set('KO', { years });
+    expect(new GrahamInputsStore(storage).get('KO')!.years).toHaveLength(25);
   });
 
   it('bereinigt manipulierte Speicherinhalte', () => {
@@ -151,12 +177,28 @@ describe('mergeGrahamInput', () => {
     expect(m.input!.years).toHaveLength(3); // Reihe bleibt die automatische
   });
 
-  it('eine eigene Jahresreihe ersetzt die automatische komplett und füllt fehlende Jahresschnittskurse aus der Antwort', () => {
+  it('eigene Jahre überlagern die automatische Reihe jahresweise: manuell gewinnt für dieses Jahr, der Rest bleibt automatisch', () => {
     const m = mergeGrahamInput(auto, { years: [{ year: 2022, netIncome: 5, ebit: null, avgFx: null }, { year: 2023, netIncome: 6, ebit: null, avgFx: 25 }] }, ctx);
     expect(m.input!.years).toEqual([
-      { year: 2022, netIncome: 5, ebit: null, avgFx: 16.7 },
-      { year: 2023, netIncome: 6, ebit: null, avgFx: 25 },
+      { year: 2022, netIncome: 5, ebit: null, avgFx: 16.7 }, // fehlendes älteres Jahr ergänzt, Jahresschnittskurs aus der Antwort
+      { year: 2023, netIncome: 6, ebit: null, avgFx: 25 }, // schlägt das automatische Jahr 2023
+      { year: 2024, netIncome: 20, ebit: 22, avgFx: 33 },
+      { year: 2025, netIncome: 30, ebit: 31, avgFx: 40 },
     ]);
+    expect(m.mixedSeries).toBe(true);
+  });
+
+  it('die Reihe bleibt nach Jahr sortiert, auch wenn eigene Jahre in beliebiger Reihenfolge ankommen', () => {
+    const m = mergeGrahamInput(auto, { years: [{ year: 2026, netIncome: 1, ebit: null, avgFx: 44 }, { year: 2020, netIncome: 2, ebit: null, avgFx: 7 }] }, ctx);
+    expect(m.input!.years.map((y) => y.year)).toEqual([2020, 2023, 2024, 2025, 2026]);
+  });
+
+  it('Hinweis auf gemischte Reihen nur, wenn eigene Jahre neben automatischen stehen', () => {
+    expect(mergeGrahamInput(auto, undefined, ctx).mixedSeries).toBe(false);
+    expect(mergeGrahamInput(auto, { shares: 5 }, ctx).mixedSeries).toBe(false); // nur Einzelwerte, keine Jahre
+    const all = { years: auto.years.map((y) => ({ year: y.year, netIncome: y.netIncome, ebit: y.ebit, avgFx: y.avgFx })) };
+    expect(mergeGrahamInput(auto, all, ctx).mixedSeries).toBe(false); // jedes automatische Jahr ist ersetzt
+    expect(mergeGrahamInput(undefined, { years: [{ year: 2025, netIncome: 1, ebit: null, avgFx: 40 }], shares: 1, netDebt: 0 }, ctx).mixedSeries).toBe(false); // keine automatische Reihe
   });
 
   it('eigene Dividendenliste gilt als vollständig (10 Jahre Abdeckung)', () => {
@@ -166,7 +208,7 @@ describe('mergeGrahamInput', () => {
   });
 
   it('fehlende Pflichtangaben → keine Eingabe, dafür die Liste der Lücken (Maske zeigt Hinweis)', () => {
-    expect(mergeGrahamInput(undefined, undefined, ctx)).toEqual({ input: null, missing: ['years', 'shares', 'netDebt'], usesManual: false });
+    expect(mergeGrahamInput(undefined, undefined, ctx)).toEqual({ input: null, missing: ['years', 'shares', 'netDebt'], usesManual: false, mixedSeries: false });
     const partial = mergeGrahamInput({ ...auto, shares: null, netDebt: null }, { shares: 10 }, ctx);
     expect(partial.missing).toEqual(['netDebt']);
     expect(partial.input).toBeNull();

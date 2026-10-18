@@ -41,30 +41,49 @@ export interface IsYatirimStatements {
   equity: number | null;
 }
 
+/** Höchstzahl Blöcke à 4 Jahre pro Abruf: 3 Blöcke = 12 Jahre (İş Yatırım reicht bis ca. FY2008, das ist mehr als nötig). */
+export const IS_YATIRIM_MAX_BLOCKS = 3;
+
 /**
  * Bilanzdaten für BIST-Unternehmen von İş Yatırım (öffentlicher, inoffizieller Endpoint, ohne Key). Je Aufruf
- * kommen 4 Geschäftsjahre in TL (auch bei Unternehmen, die in USD berichten, dann umgerechnet). Zwei Aufrufe
- * ergeben bis zu 8 Jahre. Banken und Versicherungen haben eine andere Struktur (`UFRS_K`) und liefern hier nichts.
+ * kommen 4 Geschäftsjahre in TL (auch bei Unternehmen, die in USD berichten, dann umgerechnet). Bis zu drei
+ * Aufrufe ergeben 12 Jahre; ein leerer oder fehlgeschlagener älterer Block beendet das Nachladen. Banken und
+ * Versicherungen haben eine andere Struktur (`UFRS_K`) und liefern hier nichts.
  */
 export class IsYatirimFundamentals {
   constructor(private readonly opts: HttpOptions = {}) {}
 
-  async getStatements(symbol: string, lastYear: number): Promise<IsYatirimStatements> {
-    const recent = await this.fetchBlock(symbol, [lastYear, lastYear - 1, lastYear - 2, lastYear - 3]);
-    // Der zweite Block (ältere Jahre) ist nur Zugabe: scheitert er, bleiben die 4 jüngeren Jahre.
-    const older = await this.fetchBlock(symbol, [lastYear - 4, lastYear - 5, lastYear - 6, lastYear - 7]).catch(() => new Map<number, Map<string, number | null>>());
+  /** `blocks = 1` holt nur die jüngsten 4 Jahre (wenn ältere Jahre schon gespeichert sind). */
+  async getStatements(symbol: string, lastYear: number, blocks: number = IS_YATIRIM_MAX_BLOCKS): Promise<IsYatirimStatements> {
+    const fetched: Map<number, Map<string, number | null>>[] = [];
+    for (let i = 0; i < Math.max(1, blocks); i++) {
+      const first = lastYear - 4 * i;
+      const yearList = [first, first - 1, first - 2, first - 3];
+      let block: Map<number, Map<string, number | null>>;
+      try {
+        block = await this.fetchBlock(symbol, yearList);
+      } catch (err) {
+        // Nur der jüngste Block ist Pflicht: ältere Blöcke sind Zugabe, scheitern sie, bleibt die bisherige Reihe.
+        if (i === 0) throw err;
+        break;
+      }
+      if (i > 0 && !yearList.some((y) => isPublished(block.get(y)))) break;
+      fetched.push(block);
+    }
 
     const years: IsYatirimYear[] = [];
-    for (const [year, rows] of [...older, ...recent]) {
-      const netIncome = rows.get(CODE.netIncome);
-      // Jahre ohne veröffentlichten Abschluss kommen als null oder Nullen zurück: ohne Grundkapital gilt das Jahr als leer.
-      if (netIncome === null || netIncome === undefined || !((rows.get(CODE.shareCapital) ?? 0) > 0)) continue;
-      years.push({ year, netIncome, operatingProfit: rows.get(CODE.operatingProfit) ?? null });
+    for (const block of fetched) {
+      for (const [year, rows] of block) {
+        // Jahre ohne veröffentlichten Abschluss kommen als null oder Nullen zurück: ohne Grundkapital gilt das Jahr als leer.
+        if (!isPublished(rows)) continue;
+        years.push({ year, netIncome: rows.get(CODE.netIncome) as number, operatingProfit: rows.get(CODE.operatingProfit) ?? null });
+      }
     }
     years.sort((a, b) => a.year - b.year);
     if (years.length === 0) throw new AdapterError('NOT_FOUND', `Keine Bilanzdaten für ${symbol}`, ID);
 
-    const latest = recent.get(years[years.length - 1]!.year) ?? older.get(years[years.length - 1]!.year);
+    const latestYear = years[years.length - 1]!.year;
+    const latest = fetched.map((b) => b.get(latestYear)).find((rows) => rows !== undefined);
     const get = (code: string) => latest?.get(code) ?? null;
     const debt = (get(CODE.shortLoans) ?? 0) + (get(CODE.longLoans) ?? 0);
     const cash = (get(CODE.cash) ?? 0) + (get(CODE.shortInvestments) ?? 0);
@@ -91,4 +110,11 @@ export class IsYatirimFundamentals {
     });
     return out;
   }
+}
+
+/** Ein Geschäftsjahr gilt als veröffentlicht, wenn Jahresüberschuss und Grundkapital vorliegen. */
+function isPublished(rows: Map<string, number | null> | undefined): boolean {
+  if (!rows) return false;
+  const netIncome = rows.get(CODE.netIncome);
+  return netIncome !== null && netIncome !== undefined && (rows.get(CODE.shareCapital) ?? 0) > 0;
 }

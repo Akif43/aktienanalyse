@@ -10,6 +10,7 @@ const FIELDS: { key: keyof GrahamSettings; label: DictKey }[] = [
   { key: 'bondYield', label: 'graham.settings.bondYield' },
   { key: 'safetyMargin', label: 'graham.settings.margin' },
   { key: 'safetyMarginHighDebt', label: 'graham.settings.marginHigh' },
+  { key: 'cyclicalDiscount', label: 'graham.settings.cyclicalDiscount' },
 ];
 
 const asText = (s: GrahamSettings): Record<keyof GrahamSettings, string> => Object.fromEntries(FIELDS.map((f) => [f.key, String(s[f.key])])) as Record<keyof GrahamSettings, string>;

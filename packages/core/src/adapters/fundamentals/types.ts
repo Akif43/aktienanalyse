@@ -14,12 +14,16 @@ export type FundamentalsWarning =
   | { code: 'usdReporter' }
   | { code: 'sourceFallback'; reason: string }
   | { code: 'noStatements' }
-  | { code: 'missingFx' };
+  | { code: 'missingFx' }
+  /** US-Aktie, aber `SEC_CONTACT` fehlt: EDGAR (bis zu 12 Jahre) wird übersprungen, es bleiben Yahoos 4 Jahre. */
+  | { code: 'secNotConfigured' }
+  /** EDGAR war nicht erreichbar oder lieferte unbrauchbare Daten: Ersatzreihe aus Yahoo. */
+  | { code: 'edgarFallback'; reason: string };
 
 /** Bilanzdaten für die Graham-Bewertung. Eine Reihe stammt immer aus genau einer Quelle (nie gemischt). */
 export interface Fundamentals {
   market: Market;
-  source: 'yahoo' | 'isyatirim';
+  source: 'yahoo' | 'isyatirim' | 'edgar';
   /** Währung der Werte in `years` (bei US/XETRA nur Anzeige, dort wird nicht umgerechnet). */
   reportingCurrency: 'TRY' | 'USD';
   years: FundamentalsYear[];
@@ -34,7 +38,7 @@ export interface Fundamentals {
   dividendCoverageFromYear: number | null;
   /** Aktueller Kurs Lira je USD (nur BIST). */
   currentFx: number | null;
-  /** Jahresdurchschnitt Lira je USD für alle Jahre seit 2016 (zum Vorbefüllen eigener Jahre in der Maske). */
+  /** Jahresdurchschnitt Lira je USD für alle Jahre seit 2005 (zum Vorbefüllen eigener Jahre in der Maske). */
   avgUsdTry: Record<number, number>;
   warnings: FundamentalsWarning[];
 }

@@ -40,7 +40,7 @@ export function GrahamSection({ ticker, market, price, currency }: { ticker: str
           ) : (
             <NotValuableNote merged={merged} result={result?.status === 'notValuable' ? result : null} />
           )}
-          <Notes fundamentals={fundamentals.data} result={result?.status === 'ok' ? result : null} usesManual={Boolean(merged?.usesManual)} />
+          <Notes fundamentals={fundamentals.data} result={result?.status === 'ok' ? result : null} usesManual={Boolean(merged?.usesManual)} mixedSeries={Boolean(merged?.mixedSeries)} />
           <div className="graham-form-wrap">
             <Collapsible title={t('graham.form.title')} subtitle={t('graham.form.subtitle')} storageKey={FORM_OPEN_KEY}>
               <GrahamInputsForm
@@ -88,7 +88,9 @@ function NotValuableNote({ merged, result }: { merged: GrahamMerged | null; resu
 function noteText(n: GrahamNote, t: ReturnType<typeof useT>['t']): string {
   switch (n.code) {
     case 'fewYears':
-      return t('graham.note.fewYears', { years: n.years });
+      return t('graham.note.fewYears', { years: n.years, window: n.window });
+    case 'cyclicalDiscount':
+      return t('graham.note.cyclicalDiscount', { percent: formatNumber(n.percent, 1) });
     case 'fewGrowthRates':
       return t('graham.note.fewGrowthRates', { rates: n.rates });
     case 'adjustedYears':
@@ -100,16 +102,20 @@ function noteText(n: GrahamNote, t: ReturnType<typeof useT>['t']): string {
   }
 }
 
-function Notes({ fundamentals, result, usesManual }: { fundamentals: Fundamentals | undefined; result: GrahamValuation | null; usesManual: boolean }) {
+const SOURCE_NAME: Record<Fundamentals['source'], string> = { yahoo: 'Yahoo Finance', isyatirim: 'İş Yatırım', edgar: 'SEC EDGAR' };
+
+function Notes({ fundamentals, result, usesManual, mixedSeries }: { fundamentals: Fundamentals | undefined; result: GrahamValuation | null; usesManual: boolean; mixedSeries: boolean }) {
   const { t } = useT();
   const lines: string[] = [];
   for (const n of result?.notes ?? []) lines.push(noteText(n, t));
   for (const w of fundamentals?.warnings ?? []) {
     if (w.code === 'sourceFallback') lines.push(t('graham.warn.sourceFallback', { reason: w.reason }));
+    else if (w.code === 'edgarFallback') lines.push(t('graham.warn.edgarFallback', { reason: w.reason }));
     else lines.push(t(`graham.warn.${w.code}` as const));
   }
   if (usesManual) lines.push(t('graham.manualUsed'));
-  if (fundamentals && fundamentals.years.length > 0) lines.push(t('graham.source', { source: fundamentals.source === 'isyatirim' ? 'İş Yatırım' : 'Yahoo Finance' }));
+  if (mixedSeries) lines.push(t('graham.note.mixedSeries'));
+  if (fundamentals && fundamentals.years.length > 0) lines.push(t('graham.source', { source: SOURCE_NAME[fundamentals.source] }));
   if (lines.length === 0) return null;
   return (
     <ul className="graham-notes">
@@ -264,6 +270,10 @@ function Calculation({ v, currency, market }: { v: GrahamValuation; currency: st
 
       <h4 className="lots-title">{t('graham.calc.s4')}</h4>
       <p className="row-hint">{v.type === 'growth' ? t('graham.calc.s4growth') : t('graham.calc.s4avg', { n: v.yearsUsed })}</p>
+      {v.type === 'cyclical' && <p className="row-hint">{v.weakYears.length > 0 ? t('graham.calc.weakYears', { years: v.weakYears.join(', ') }) : t('graham.calc.noWeakYear')}</p>}
+      {v.cyclicalDiscountApplied && (
+        <p className="row-hint">{t('graham.calc.discount', { pct: formatNumber(settings.cyclicalDiscount, 1), before: formatPrice(v.epsBeforeDiscount, currency), after: formatPrice(v.eps, currency) })}</p>
+      )}
       <p>{t('graham.calc.s4eps', { eps: formatPrice(v.eps, currency) })}</p>
 
       <h4 className="lots-title">{t('graham.calc.s5')}</h4>

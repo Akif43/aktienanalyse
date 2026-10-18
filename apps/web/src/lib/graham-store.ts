@@ -11,6 +11,7 @@ const LIMITS: Record<keyof GrahamSettings, [number, number]> = {
   bondYield: [0.1, 30],
   safetyMargin: [0, 90],
   safetyMarginHighDebt: [0, 90],
+  cyclicalDiscount: [0, 50],
 };
 
 /** Prüft gelesene Daten: unbrauchbare Werte fallen auf den Standard zurück. */
@@ -87,8 +88,9 @@ export interface GrahamManualYear {
 }
 
 /**
- * Eigene Werte einer Aktie. Ist `years` gesetzt, ersetzt die Reihe die automatische vollständig (Quellen werden nie
- * gemischt); die übrigen Felder überschreiben jeweils nur den einzelnen automatischen Wert.
+ * Eigene Werte einer Aktie. Die Jahre in `years` überlagern die automatische Reihe jahresweise (für dieses Jahr gewinnt
+ * der eigene Wert, alle anderen Jahre bleiben automatisch), so lassen sich auch fehlende ältere Jahre nachtragen. Die
+ * übrigen Felder überschreiben jeweils nur den einzelnen automatischen Wert.
  */
 export interface GrahamManual {
   years?: GrahamManualYear[];
@@ -101,7 +103,7 @@ export interface GrahamManual {
 }
 
 const MAX_TICKERS = 100;
-const MAX_YEARS = 12;
+const MAX_YEARS = 30;
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 export function sanitizeGrahamManual(raw: unknown): GrahamManual | null {

@@ -21,6 +21,8 @@ export interface GrahamSettings {
   bondYield: number;
   safetyMargin: number;
   safetyMarginHighDebt: number;
+  /** Abschlag auf den normalisierten Gewinn zyklischer Firmen, solange der Zeitraum kein schwaches Jahr enthält (Fallback). */
+  cyclicalDiscount: number;
 }
 
 export const DEFAULT_GRAHAM_SETTINGS: GrahamSettings = {
@@ -30,6 +32,7 @@ export const DEFAULT_GRAHAM_SETTINGS: GrahamSettings = {
   bondYield: 5,
   safetyMargin: 30,
   safetyMarginHighDebt: 40,
+  cyclicalDiscount: 15,
 };
 
 /** Festgelegte Schwellen der Methode (nicht in den Einstellungen änderbar). */
@@ -46,6 +49,10 @@ export const GRAHAM_PE_OPTIMISTIC_DELTA = 1;
 /** Mindestzahl Geschäftsjahre, damit überhaupt bewertet wird. */
 export const GRAHAM_MIN_YEARS = 3;
 export const GRAHAM_FULL_YEARS = 5;
+/** Höchstzahl Jahre für Typ-Erkennung und normalisierten Gewinn (möglichst ein ganzer Konjunkturzyklus). */
+export const GRAHAM_WINDOW_YEARS = 10;
+/** Ein Jahr gilt als schwach, wenn der bereinigte Gewinn unter diesem Anteil des Durchschnitts liegt. */
+export const GRAHAM_WEAK_YEAR_RATIO = 0.5;
 
 export interface GrahamYearInput {
   year: number;
@@ -83,7 +90,8 @@ export interface GrahamInput {
 }
 
 export type GrahamNote =
-  | { code: 'fewYears'; years: number }
+  | { code: 'fewYears'; years: number; window: number }
+  | { code: 'cyclicalDiscount'; percent: number }
   | { code: 'fewGrowthRates'; rates: number }
   | { code: 'adjustedYears'; years: string }
   | { code: 'ias29' }
@@ -146,15 +154,21 @@ export interface GrahamValuation {
   verdict: GrahamVerdict;
   type: GrahamCompanyType;
   years: GrahamYearResult[];
-  /** Zahl der für den Durchschnitt/Typ genutzten Jahre (max. 5). */
+  /** Zahl der für den Durchschnitt/Typ genutzten Jahre (max. 10). */
   yearsUsed: number;
   growthRates: number[];
   avgGrowth: number | null;
   coefficientOfVariation: number | null;
   hasLossYear: boolean;
   hasBigDecline: boolean;
+  /** Jahre im genutzten Zeitraum, deren bereinigter Gewinn unter 50 % des Durchschnitts liegt. */
+  weakYears: number[];
   /** Normalisierter Gewinn in Vergleichswährung vor Umrechnung/Aktienzahl. */
   normalizedEarnings: number;
+  /** Gewinn je Aktie vor einem eventuellen Zyklus-Abschlag. */
+  epsBeforeDiscount: number;
+  /** Zyklus-Abschlag wurde angewendet (zyklisch und kein schwaches Jahr im Zeitraum). */
+  cyclicalDiscountApplied: boolean;
   eps: number;
   marketCap: number;
   netDebtRatio: number;
@@ -221,10 +235,10 @@ export function computeGraham(input: GrahamInput, settings: GrahamSettings = DEF
     return { year: y.year, netIncome: y.netIncome, ebit: y.ebit, base, adjusted: distorted ? (y.ebit as number) * factor : base, adjustedForOneOff: distorted };
   });
 
-  const recent = converted.slice(-GRAHAM_FULL_YEARS);
+  const recent = converted.slice(-GRAHAM_WINDOW_YEARS);
   const adjusted = recent.map((y) => y.adjusted);
   const notes: GrahamNote[] = [];
-  if (converted.length < GRAHAM_FULL_YEARS) notes.push({ code: 'fewYears', years: converted.length });
+  if (converted.length < GRAHAM_WINDOW_YEARS) notes.push({ code: 'fewYears', years: converted.length, window: GRAHAM_WINDOW_YEARS });
   const oneOffYears = recent.filter((y) => y.adjustedForOneOff).map((y) => y.year);
   if (oneOffYears.length > 0) notes.push({ code: 'adjustedYears', years: oneOffYears.join(', ') });
   if (tlReporter) notes.push({ code: 'ias29' });
@@ -257,8 +271,15 @@ export function computeGraham(input: GrahamInput, settings: GrahamSettings = DEF
   // Schritt 4: normalisierter Gewinn je Aktie
   const normalizedEarnings = type === 'growth' ? (adjusted[adjusted.length - 1] as number) : avgAdjusted;
   const fxBack = isBist ? (input.currentFx as number) : 1;
-  const eps = (normalizedEarnings * fxBack) / shares;
-  if (!(eps > 0)) return { status: 'notValuable', reason: 'negativeEps', eps, type };
+  const epsBeforeDiscount = (normalizedEarnings * fxBack) / shares;
+  if (!(epsBeforeDiscount > 0)) return { status: 'notValuable', reason: 'negativeEps', eps: epsBeforeDiscount, type };
+
+  // Fallback-Abschlag: Enthält der Zeitraum bei einer zyklischen Firma kein schwaches Jahr, ist der Zyklus vermutlich
+  // nicht vollständig erfasst und der Durchschnitt zu optimistisch.
+  const weakYears = recent.filter((y) => y.adjusted < GRAHAM_WEAK_YEAR_RATIO * avgAdjusted).map((y) => y.year);
+  const cyclicalDiscountApplied = type === 'cyclical' && weakYears.length === 0 && settings.cyclicalDiscount > 0;
+  const eps = cyclicalDiscountApplied ? epsBeforeDiscount * (1 - settings.cyclicalDiscount / 100) : epsBeforeDiscount;
+  if (cyclicalDiscountApplied) notes.push({ code: 'cyclicalDiscount', percent: settings.cyclicalDiscount });
 
   // Schritt 5: faires KGV aus der geforderten Rendite
   const marketCap = price * shares;
@@ -298,7 +319,10 @@ export function computeGraham(input: GrahamInput, settings: GrahamSettings = DEF
     coefficientOfVariation,
     hasLossYear,
     hasBigDecline,
+    weakYears,
     normalizedEarnings,
+    epsBeforeDiscount,
+    cyclicalDiscountApplied,
     eps,
     marketCap,
     netDebtRatio,
